@@ -9,6 +9,7 @@ const {
   saveState,
   loadState,
   resetStaleRunning,
+  resetFailed,
   updateFileStatus,
   getPendingFiles,
   markForRetry,
@@ -128,6 +129,40 @@ describe("resetStaleRunning", () => {
     assert.equal(state.files["c.ts"].status, "COMPLETED");
     assert.equal(state.stats.pending, 3);
     assert.equal(state.stats.completed, 1);
+  });
+});
+
+describe("resetFailed", () => {
+  it("resets FAILED, TIMEOUT, and SKIPPED to PENDING with attempts=0", () => {
+    const state = initState("/tmp/p", ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"], testConfig);
+    state.files["a.ts"].status = "FAILED";
+    state.files["a.ts"].attempts = 2;
+    state.files["b.ts"].status = "TIMEOUT";
+    state.files["b.ts"].attempts = 1;
+    state.files["c.ts"].status = "SKIPPED";
+    state.files["c.ts"].attempts = 3;
+    state.files["d.ts"].status = "COMPLETED";
+    state.files["e.ts"].status = "PENDING";
+
+    const count = resetFailed(state);
+    assert.equal(count, 3);
+    assert.equal(state.files["a.ts"].status, "PENDING");
+    assert.equal(state.files["a.ts"].attempts, 0);
+    assert.equal(state.files["b.ts"].status, "PENDING");
+    assert.equal(state.files["b.ts"].attempts, 0);
+    assert.equal(state.files["c.ts"].status, "PENDING");
+    assert.equal(state.files["c.ts"].attempts, 0);
+    assert.equal(state.files["d.ts"].status, "COMPLETED");
+    assert.equal(state.files["e.ts"].status, "PENDING");
+    assert.equal(state.stats.pending, 4);
+    assert.equal(state.stats.completed, 1);
+  });
+
+  it("returns 0 when no failed files", () => {
+    const state = initState("/tmp/p", ["a.ts"], testConfig);
+    state.files["a.ts"].status = "COMPLETED";
+    const count = resetFailed(state);
+    assert.equal(count, 0);
   });
 });
 

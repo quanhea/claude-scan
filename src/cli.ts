@@ -21,6 +21,8 @@ function parseArgs(argv: string[]): {
       options.version = true;
     } else if (arg === "--resume") {
       options.resume = true;
+    } else if (arg === "--retry") {
+      options.retry = true;
     } else if (arg === "--dry-run") {
       options.dryRun = true;
     } else if (arg === "--force") {
@@ -72,12 +74,15 @@ function printHelp(): void {
 claude-scan — parallel vulnerability scanner powered by Claude Code
 
 Usage:
-  claude-scan <target-dir> [options]
+  claude-scan [target-dir] [options]
+
+  When no target-dir is given, scans the current directory.
 
 Options:
   -j, --parallel <n>        Parallel workers           (default: ${DEFAULTS.parallel})
   -t, --timeout <seconds>   Per-file timeout           (default: ${DEFAULTS.timeout})
-      --resume               Resume a previous scan
+      --resume               Resume pending files from a previous scan
+      --retry                Retry failed/timed-out files (use with --resume)
       --include <glob>       Only scan matching files
       --exclude <glob>       Skip matching files
   -o, --output <dir>        Output directory            (default: .claude-scan)
@@ -115,11 +120,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (!targetDir && !options.resume) {
-    console.error("Error: target directory required.\n");
-    printHelp();
-    process.exit(1);
-  }
+  // Default to current directory when no target specified
 
   const resolvedTarget = targetDir
     ? path.resolve(targetDir)
@@ -142,6 +143,7 @@ async function main(): Promise<void> {
     include: (options.include as string) ?? null,
     exclude: (options.exclude as string) ?? null,
     resume: !!options.resume,
+    retry: !!options.retry,
     dryRun: !!options.dryRun,
     force: !!options.force,
     verbose: !!options.verbose,

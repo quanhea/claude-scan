@@ -23,14 +23,17 @@ describe("CLI", () => {
     assert.match(out.trim(), /^\d+\.\d+\.\d+$/);
   });
 
-  it("exits with error when no target dir given", () => {
-    try {
-      execFileSync("node", [CLI], { encoding: "utf-8", stdio: "pipe" });
-      assert.fail("Should have exited with error");
-    } catch (err) {
-      assert.ok(err.status !== 0);
-      assert.ok(err.stderr.includes("target directory required"));
-    }
+  it("defaults to current directory with --dry-run", () => {
+    const out = execFileSync("node", [CLI, "--dry-run"], {
+      encoding: "utf-8",
+      cwd: FIXTURES,
+    });
+    assert.ok(out.includes("Would scan") || out.includes("No files"));
+  });
+
+  it("--help shows --retry flag", () => {
+    const out = execFileSync("node", [CLI, "--help"], { encoding: "utf-8" });
+    assert.ok(out.includes("--retry"));
   });
 
   it("--dry-run lists files without scanning", () => {

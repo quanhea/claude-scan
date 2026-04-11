@@ -39,6 +39,12 @@ claude-scan ./my-project --include "*.py"
 
 # Resume after crash or Ctrl+C
 claude-scan ./my-project --resume
+
+# Retry failed/timed-out files
+claude-scan --resume --retry
+
+# Scan current directory
+claude-scan
 ```
 
 ## How It Works
@@ -81,7 +87,8 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
 ```
   -j, --parallel <n>        Parallel workers            (default: 4)
   -t, --timeout <seconds>   Per-file timeout            (default: 300)
-      --resume               Resume a previous scan
+      --resume               Resume pending files from a previous scan
+      --retry                Retry failed/timed-out files (use with --resume)
       --include <glob>       Only scan matching files
       --exclude <glob>       Skip matching files
   -o, --output <dir>        Output directory             (default: .claude-scan)
@@ -105,9 +112,17 @@ claude-scan ./my-project --resume
 
 Completed files are never re-scanned. Files that were mid-scan reset to pending.
 
+To also retry files that failed or timed out:
+
+```bash
+claude-scan --resume --retry
+```
+
 **Signal handling:**
 - 1st Ctrl+C — stops the queue, waits for running scans to finish
 - 2nd Ctrl+C — kills all workers immediately, saves state, exits
+
+The tool prints actionable hints at exit when files are pending or failed.
 
 ## Custom Prompts
 

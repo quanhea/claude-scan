@@ -111,6 +111,23 @@ export function resetStaleRunning(state: ScanState): number {
   return count;
 }
 
+export function resetFailed(state: ScanState): number {
+  let count = 0;
+  for (const entry of Object.values(state.files)) {
+    if (
+      entry.status === STATUS.FAILED ||
+      entry.status === STATUS.TIMEOUT ||
+      entry.status === STATUS.SKIPPED
+    ) {
+      entry.status = STATUS.PENDING;
+      entry.attempts = 0;
+      count++;
+    }
+  }
+  state.stats = computeStats(state.files);
+  return count;
+}
+
 export function updateFileStatus(
   state: ScanState,
   filePath: string,

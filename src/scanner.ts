@@ -9,6 +9,7 @@ import {
   loadState,
   saveState,
   resetStaleRunning,
+  resetFailed,
   updateFileStatus,
   getPendingFiles,
   markForRetry,
@@ -41,6 +42,7 @@ export async function scan(options: ScanOptions): Promise<number> {
     include,
     exclude,
     resume,
+    retry,
     dryRun,
     force,
     verbose,
@@ -78,6 +80,12 @@ export async function scan(options: ScanOptions): Promise<number> {
     const resetCount = resetStaleRunning(state);
     if (resetCount > 0) {
       console.log(`Resumed: reset ${resetCount} interrupted scans to pending.`);
+    }
+    if (retry) {
+      const retryCount = resetFailed(state);
+      if (retryCount > 0) {
+        console.log(`Retry: reset ${retryCount} failed/timed-out files to pending.`);
+      }
     }
     // Apply new config overrides
     state.config = config;
@@ -313,6 +321,19 @@ export async function scan(options: ScanOptions): Promise<number> {
     if (completedFiles.length > SHOW_MAX) {
       console.log(`    ... +${completedFiles.length - SHOW_MAX} more (see summary.md)`);
     }
+  }
+
+  // Exit hints
+  if (state.stats.pending > 0) {
+    console.log("");
+    console.log(`  ${state.stats.pending} files still pending.`);
+    console.log("  To continue:  claude-scan --resume");
+  }
+  const failedCount = state.stats.failed + state.stats.timeout;
+  if (failedCount > 0) {
+    console.log("");
+    console.log(`  ${failedCount} files failed or timed out.`);
+    console.log("  To retry:     claude-scan --resume --retry");
   }
 
   removeLockFile(absOutput);

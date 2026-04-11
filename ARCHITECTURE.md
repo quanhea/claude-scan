@@ -63,8 +63,9 @@ running, completed, failed) is kept in memory as a `ScanState` object and
 periodically flushed to `.claude-scan/state.json`. All writes are atomic:
 write to a `.tmp` file, fsync, then rename. This guarantees that a crash at
 any point leaves either the old or new state on disk, never a partial write.
-On `--resume`, stale RUNNING entries (from a previous crash) are reset to
-PENDING.
+On `--resume`, stale RUNNING entries are reset to PENDING. On `--resume --retry`,
+FAILED/TIMEOUT/SKIPPED entries are also reset (with attempts zeroed) so they
+get a fresh run.
 
 ### The Execution Engine
 
