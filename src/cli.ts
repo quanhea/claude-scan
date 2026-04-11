@@ -49,9 +49,11 @@ function parseArgs(argv: string[]): {
     ) {
       options.output = args[++i];
     } else if (arg === "--include" && i + 1 < args.length) {
-      options.include = args[++i];
+      const val = args[++i];
+      options.include = options.include ? options.include + "\0" + val : val;
     } else if (arg === "--exclude" && i + 1 < args.length) {
-      options.exclude = args[++i];
+      const val = args[++i];
+      options.exclude = options.exclude ? options.exclude + "\0" + val : val;
     } else if (arg === "--model" && i + 1 < args.length) {
       options.model = args[++i];
     } else if (arg === "--max-turns" && i + 1 < args.length) {
@@ -146,8 +148,8 @@ async function main(): Promise<void> {
     maxFileSizeKB: Number(options.maxFileSize) || DEFAULTS.maxFileSizeKB,
     model: (options.model as string) ?? null,
     promptFile: (options.prompt as string) ?? null,
-    include: (options.include as string) ?? null,
-    exclude: (options.exclude as string) ?? null,
+    include: options.include ? (options.include as string).split("\0") : null,
+    exclude: options.exclude ? (options.exclude as string).split("\0") : null,
     includeTests: !!options.includeTests,
     summarize: !!options.summarize,
     resume: !!options.resume,

@@ -75,8 +75,8 @@ export interface ScanOptions {
   maxFileSizeKB: number;
   model: string | null;
   promptFile: string | null;
-  include: string | null;
-  exclude: string | null;
+  include: string | string[] | null;
+  exclude: string | string[] | null;
   includeTests: boolean;
   summarize: boolean;
   resume: boolean;
