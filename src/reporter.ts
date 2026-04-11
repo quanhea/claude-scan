@@ -1,9 +1,9 @@
 // src/reporter.ts — aggregate per-file reports into summary.md
-import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { ScanState, ScanConfig, STATUS } from "./types";
 import { loadPrompt, renderPrompt } from "./prompt";
+import { spawnClaude } from "./worker";
 
 export interface Finding {
   file: string;
@@ -114,7 +114,6 @@ export interface SummarizeResult {
   durationMs: number;
   exitCode: number | null;
   error?: string;
-  claudeResult?: string;
   cost?: number;
 }
 
@@ -122,151 +121,45 @@ export async function summarizeWithClaude(options: {
   outputDir: string;
   state: ScanState;
   config: ScanConfig;
-  onLog?: (msg: string) => void;
 }): Promise<SummarizeResult> {
-  const { outputDir, state, config, onLog } = options;
+  const { outputDir, state, config } = options;
   const reportsDir = path.join(outputDir, "reports");
   const summaryPath = path.join(outputDir, "summary.md");
   const logPath = path.join(outputDir, "logs", "summary.log");
   const rawPath = path.join(outputDir, "raw", "summary.json");
-  const startTime = Date.now();
 
-  const log = (msg: string) => { if (onLog) onLog(msg); };
-
-  // Check for completed reports
-  const reportFiles = Object.values(state.files)
-    .filter((e) => e.status === STATUS.COMPLETED && e.reportPath && fs.existsSync(e.reportPath));
-
-  if (reportFiles.length === 0) {
-    log("No completed reports to summarize.");
-    writeSummary(outputDir, state);
-    return { success: false, summaryPath, durationMs: 0, exitCode: null, error: "no_reports" };
-  }
-
-  log(`Reading ${reportFiles.length} report files...`);
-
-  // Load and render the summary prompt
+  // Render the summary prompt — same pattern as per-file scan
   const template = loadPrompt("summary.md");
   const prompt = renderPrompt(template, {
     REPORTS_DIR: reportsDir,
     SUMMARY_PATH: summaryPath,
   });
 
-  const args: string[] = [
-    "--dangerously-skip-permissions",
-    "-p",
-    prompt,
-    "--max-turns",
-    String(config.maxTurns),
-    "--output-format",
-    "json",
-    "--no-session-persistence",
-  ];
+  // Same spawnClaude as per-file scan — identical flags, identical behavior
+  const { promise } = spawnClaude({ prompt, cwd: outputDir, logPath, rawPath, config });
+  const r = await promise;
 
-  if (config.model) {
-    args.push("--model", config.model);
-    log(`Using model: ${config.model}`);
+  // Map result
+  if (r.killed || r.exitCode !== 0 || r.isError) {
+    writeSummary(outputDir, state);
+    return {
+      success: false, summaryPath, durationMs: r.durationMs,
+      exitCode: r.exitCode, error: r.error, cost: r.cost,
+    };
   }
 
-  fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  fs.mkdirSync(path.dirname(rawPath), { recursive: true });
-  const logStream = fs.createWriteStream(logPath, { flags: "w" });
-
-  return new Promise<SummarizeResult>((resolve) => {
-    log("Spawning Claude for summary generation...");
-
-    const child = spawn("claude", args, {
-      cwd: outputDir,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
-    });
-
-    let lastStdoutChunk = "";
-
-    if (child.stdout) {
-      child.stdout.on("data", (data: Buffer) => {
-        lastStdoutChunk = data.toString();
-      });
-      child.stdout.pipe(logStream);
+  // Check if Claude wrote the summary file
+  if (fs.existsSync(summaryPath)) {
+    const content = fs.readFileSync(summaryPath, "utf-8").trim();
+    if (content.length > 50) {
+      return { success: true, summaryPath, durationMs: r.durationMs, exitCode: r.exitCode, cost: r.cost };
     }
-    if (child.stderr) {
-      child.stderr.pipe(logStream);
-    }
+  }
 
-    const timeoutTimer = setTimeout(() => {
-      log(`Timeout after ${config.timeout}s — killing summary process.`);
-      try { child.kill("SIGTERM"); } catch {}
-    }, config.timeout * 1000);
-
-    child.on("exit", (code) => {
-      clearTimeout(timeoutTimer);
-      logStream.end();
-
-      const durationMs = Date.now() - startTime;
-
-      // Parse JSON response for details
-      let claudeResult: string | undefined;
-      let cost: number | undefined;
-      let isError = false;
-
-      try {
-        const raw = lastStdoutChunk.trim() || fs.readFileSync(logPath, "utf-8").trim();
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          fs.writeFileSync(rawPath, JSON.stringify(parsed, null, 2));
-          claudeResult = parsed.result;
-          cost = parsed.total_cost_usd;
-          isError = parsed.is_error === true;
-
-          if (isError) {
-            log(`Claude error: ${parsed.result}`);
-          } else if (cost !== undefined) {
-            log(`Cost: $${cost.toFixed(4)}`);
-          }
-        }
-      } catch {
-        // Not JSON
-      }
-
-      if (isError || code !== 0) {
-        const errMsg = claudeResult || `exit_code_${code}`;
-        log(`Summary generation failed: ${errMsg}`);
-        writeSummary(outputDir, state);
-        resolve({ success: false, summaryPath, durationMs, exitCode: code, error: errMsg, claudeResult, cost });
-        return;
-      }
-
-      // Verify Claude wrote something meaningful
-      if (fs.existsSync(summaryPath)) {
-        const content = fs.readFileSync(summaryPath, "utf-8").trim();
-        if (content.length > 50) {
-          log("AI summary written successfully.");
-          resolve({ success: true, summaryPath, durationMs, exitCode: code, claudeResult, cost });
-          return;
-        }
-      }
-
-      // Claude succeeded but didn't write the file — check if result contains the summary
-      if (claudeResult && claudeResult.length > 100) {
-        log("Claude returned summary in response (didn't write file). Writing it.");
-        fs.writeFileSync(summaryPath, claudeResult);
-        resolve({ success: true, summaryPath, durationMs, exitCode: code, claudeResult, cost });
-        return;
-      }
-
-      log("Claude completed but no summary was produced. Using basic fallback.");
-      writeSummary(outputDir, state);
-      resolve({ success: false, summaryPath, durationMs, exitCode: code, error: "no_output", claudeResult, cost });
-    });
-
-    child.on("error", (err) => {
-      clearTimeout(timeoutTimer);
-      logStream.end();
-      const durationMs = Date.now() - startTime;
-      const errMsg = err.message.includes("ENOENT") ? "claude not found" : err.message;
-      log(`Spawn error: ${errMsg}`);
-      writeSummary(outputDir, state);
-      resolve({ success: false, summaryPath, durationMs, exitCode: null, error: errMsg });
-    });
-  });
+  // Fallback
+  writeSummary(outputDir, state);
+  return {
+    success: false, summaryPath, durationMs: r.durationMs,
+    exitCode: r.exitCode, error: "no_output", cost: r.cost,
+  };
 }
