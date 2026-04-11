@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.claude-scan/
+*.log
+.DS_Store

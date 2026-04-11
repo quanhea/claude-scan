@@ -1,0 +1,46 @@
+{
+  "name": "@eastagile/claude-scan",
+  "version": "1.0.0",
+  "description": "Parallel vulnerability scanner powered by Claude Code. Scans every file in a project for security vulnerabilities.",
+  "license": "MIT",
+  "author": "East Agile <dev@eastagile.com> (https://eastagile.com)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quanhea/claude-scan.git"
+  },
+  "keywords": [
+    "security",
+    "vulnerability",
+    "scanner",
+    "claude",
+    "claude-code",
+    "anthropic",
+    "sast",
+    "code-review",
+    "parallel",
+    "ctf"
+  ],
+  "bin": {
+    "claude-scan": "./dist/cli.js"
+  },
+  "main": "dist/scanner.js",
+  "files": [
+    "dist/",
+    "prompts/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "node --test test/*.test.js",
+    "test:ci": "node --test --test-reporter=spec test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}
