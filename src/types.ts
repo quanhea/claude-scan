@@ -146,7 +146,7 @@ export const JVM_TEST_PATTERNS = {
 };
 
 export const DEFAULTS: ScanConfig & { maxFileSizeKB: number } = {
-  parallel: 4,
+  parallel: 12,
   timeout: 300,
   maxRetries: 2,
   maxTurns: 30,
