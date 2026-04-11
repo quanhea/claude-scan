@@ -1,8 +1,58 @@
 # claude-scan
 
-Parallel vulnerability scanner powered by [Claude Code](https://code.claude.com). Scans every file in a project for security vulnerabilities using the scaffold from [Nicholas Carlini's [un]prompted 2026 talk](https://www.anthropic.com/news/claude-code-security).
+Parallel vulnerability scanner powered by Claude Code.
 
-Each source file gets its own Claude Code process running the exact prompt:
+Scans every source file in a project for security vulnerabilities — each file gets its own Claude Code process running in parallel. Produces per-file vulnerability reports and an aggregated summary.
+
+## Background
+
+At [un]prompted 2026, Anthropic researcher Nicholas Carlini showed that a surprisingly simple scaffold — `claude -p "You are playing in a CTF. Find a vulnerability. hint: look at <file>"` — can find critical zero-days in production software, including a 23-year-old Linux kernel bug and the first critical CVE in Ghost CMS.
+
+The key to scaling this across a codebase is a one-line addition: `hint: look at <file>`, iterated over every source file in the project. Anthropic described this approach in their [red team blog post](https://www.anthropic.com/news/claude-code-security) but did not publish the tooling.
+
+**claude-scan is the open-source implementation of that scaffold.** It handles the boring parts — file discovery, parallel process management, crash recovery, progress display — so the model can do what it's good at.
+
+## Install
+
+```bash
+npm install -g @eastagile/claude-scan
+```
+
+Prerequisites:
+- Node.js 18+
+- [Claude Code](https://code.claude.com/docs/en/quickstart) installed and authenticated (`claude auth login`)
+
+## Quick Start
+
+```bash
+# Scan a project
+claude-scan ./my-project
+
+# Preview what files would be scanned
+claude-scan ./my-project --dry-run
+
+# Scan with 8 parallel workers
+claude-scan ./my-project -j 8
+
+# Only scan Python files
+claude-scan ./my-project --include "*.py"
+
+# Resume after crash or Ctrl+C
+claude-scan ./my-project --resume
+```
+
+## How It Works
+
+```
+discover files → queue them → spawn N claude -p processes → collect reports
+```
+
+1. **Discover** — `git ls-files` (respects `.gitignore`) or recursive directory walk, filtered by extension, file size, and binary content detection. No LLM calls are spent on filtering.
+2. **Fan out** — spawns up to N `claude --dangerously-skip-permissions --bare -p "<prompt>"` processes in parallel, each analyzing one file.
+3. **Monitor** — tracks progress, handles timeouts (default 5 min per file) and hung processes (no output for 2 min), saves state atomically for crash recovery.
+4. **Collect** — aggregates per-file reports into `summary.md` sorted by severity.
+
+Each Claude invocation uses the exact prompt from Carlini's scaffold:
 
 ```
 You are playing in a CTF.
@@ -11,34 +61,19 @@ hint: look at <file>
 Write the most serious one to <report>.
 ```
 
-## Install
+## Output
 
-```bash
-npm install -g @eastagile/claude-scan
+Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
+
 ```
-
-Requires [Claude Code](https://code.claude.com/docs/en/quickstart) installed and authenticated.
-
-## Usage
-
-```bash
-# Scan a project
-claude-scan ./my-project
-
-# Scan with 8 parallel workers
-claude-scan ./my-project -j 8
-
-# Only scan Python files
-claude-scan ./my-project --include "*.py"
-
-# Preview what would be scanned
-claude-scan ./my-project --dry-run
-
-# Resume after crash or interruption
-claude-scan ./my-project --resume
-
-# Custom prompt
-claude-scan ./my-project --prompt my-prompt.md
+.claude-scan/
+├── summary.md          # Findings aggregated by severity
+├── state.json          # Scan state (enables --resume)
+├── reports/            # One markdown report per scanned file
+│   ├── src__auth__login.ts.md
+│   └── src__db__queries.py.md
+├── logs/               # Claude stdout+stderr per file
+└── raw/                # Raw JSON output from Claude
 ```
 
 ## Options
@@ -60,46 +95,23 @@ claude-scan ./my-project --prompt my-prompt.md
       --force                Override scan lock
 ```
 
-## Output
+## Crash Recovery
 
-Results are written to `.claude-scan/` in the target directory:
-
-```
-.claude-scan/
-├── summary.md          # Aggregated findings by severity
-├── state.json          # Scan state (enables --resume)
-├── reports/            # One markdown report per file
-│   ├── src__auth__login.ts.md
-│   └── src__db__queries.py.md
-├── logs/               # Claude stdout+stderr per file
-└── raw/                # Raw JSON output
-```
-
-## How It Works
-
-1. **Discover** — `git ls-files` (respects `.gitignore`) or directory walk, filtered by extension, size, and binary detection
-2. **Fan out** — spawns up to N `claude -p` processes in parallel, each analyzing one file
-3. **Monitor** — tracks progress, handles timeouts and hangs, saves state for resume
-4. **Collect** — aggregates per-file reports into `summary.md` sorted by severity
-
-### Crash Recovery
-
-State is saved atomically (write → fsync → rename) after every file completes. If the process crashes:
+State is saved atomically (write temp file → fsync → rename) after every file completes and every 30 seconds. If the process crashes, is killed, or you hit Ctrl+C:
 
 ```bash
-claude-scan ./my-project --resume  # picks up where it left off
+claude-scan ./my-project --resume
 ```
 
 Completed files are never re-scanned. Files that were mid-scan reset to pending.
 
-### Signal Handling
-
-- **1st Ctrl+C** — stops the queue, waits for running scans to finish
-- **2nd Ctrl+C** — kills all workers, saves state, exits
+**Signal handling:**
+- 1st Ctrl+C — stops the queue, waits for running scans to finish
+- 2nd Ctrl+C — kills all workers immediately, saves state, exits
 
 ## Custom Prompts
 
-Create a prompt template with `{{FILE_PATH}}` and `{{REPORT_PATH}}` placeholders:
+Create a template with `{{FILE_PATH}}` and `{{REPORT_PATH}}` placeholders:
 
 ```markdown
 You are a security auditor.
@@ -111,14 +123,18 @@ Write a detailed report to {{REPORT_PATH}}.
 claude-scan ./my-project --prompt my-prompt.md
 ```
 
-## Security
+## Security Warning
 
-This tool runs Claude Code with `--dangerously-skip-permissions`. Claude can read files and execute commands in the target directory without confirmation. Recommendations:
+This tool runs Claude Code with `--dangerously-skip-permissions`. Claude can execute arbitrary commands in the target directory without confirmation.
 
-- Run in a container or VM
-- Run on a clean checkout (no secrets)
-- Consider `--network none` in Docker
+- **Run in a container or VM.** Docker with `--network none` is ideal.
+- **Run on a clean checkout.** Don't scan repos with secrets, credentials, or `.env` files.
+- **The default prompt finds and reports vulnerabilities.** It does not attempt exploitation, but Claude has full tool access.
+
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a guide to the codebase. Detailed design docs with Mermaid diagrams are in `docs/architecture/`.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
