@@ -364,51 +364,38 @@ flowchart TD
 
 ---
 
-## Rate Limiting & Backoff
+## Rate Limiting
 
-Anthropic enforces API rate limits. When Claude Code hits a rate limit, it either:
-- Retries internally (newer versions handle this), or
-- Exits with an error
+Anthropic enforces API rate limits. Claude Code CLI does not expose the
+`retry-after` header from the API response.
 
 ### Detection
 
-```
-Rate limit indicators in claude output:
-  - Exit code != 0
-  - stderr contains "rate_limit" or "429" or "overloaded"
-  - stderr contains "ResourceExhausted"
-```
+Rate limit errors are classified by `spawnClaude()` when the JSON response
+contains "429", "rate_limit", or "overloaded" in the result string.
 
-### Response
+### Auto-Pause Behavior
 
 ```mermaid
 flowchart TD
-    A[Worker exits with rate limit] --> B{Retries left?}
-    B -->|Yes| C[Exponential backoff]
-    C --> D["Wait 30s × 2^attempt"]
-    D --> E[Re-queue file as PENDING]
-    E --> F[Reduce concurrency by 1]
-    F --> G[Continue scanning]
-    B -->|No| H[Mark file SKIPPED]
-    H --> I["Log: rate limited, skip"]
-
-    G --> J{Successful scans resuming?}
-    J -->|"5 consecutive successes"| K[Restore concurrency +1]
-    J -->|No| G
+    A[Worker exits with rate_limit] --> B[Requeue file]
+    B --> C[Pause pool]
+    C --> D["Print: Rate limited. Will auto-resume when ready."]
+    D --> E[Wait 15 minutes]
+    E --> F[Resume pool — next file acts as probe]
+    F --> G{Probe result?}
+    G -->|Success| H["Print: Rate limit cleared. Resuming scan."]
+    H --> I[Continue scanning normally]
+    G -->|Still rate limited| C
 ```
 
-### Adaptive concurrency
+On the first 429, the scanner pauses the pool, requeues the failed file,
+and starts a 15-minute retry timer. When the timer fires, the pool resumes
+and the requeued file runs as a probe. If the probe succeeds, scanning
+continues. If it fails with another 429, the cycle repeats.
 
-```
-On rate limit:
-  concurrency = max(1, concurrency - 1)
-
-After 5 consecutive successes:
-  concurrency = min(originalConcurrency, concurrency + 1)
-```
-
-This automatically throttles down when hitting limits and recovers when the
-window reopens.
+The pool also adapts concurrency independently — reducing by 1 on rate limit
+errors and restoring after 5 consecutive successes.
 
 ---
 

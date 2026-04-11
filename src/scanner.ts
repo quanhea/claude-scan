@@ -254,6 +254,18 @@ export async function scan(options: ScanOptions): Promise<number> {
 
   // Fatal error detection — halt on auth failures
   let consecutiveAuthErrors = 0;
+
+  // Rate limit auto-pause — silently retry every 15 min
+  let rateLimitPaused = false;
+  let rateLimitTimer: NodeJS.Timeout | null = null;
+  const RATE_LIMIT_RETRY_MS = 15 * 60 * 1000;
+
+  function scheduleRateLimitRetry(): void {
+    rateLimitTimer = setTimeout(() => {
+      rateLimitPaused = false;
+      pool.resume();
+    }, RATE_LIMIT_RETRY_MS);
+  }
   const FATAL_AUTH_THRESHOLD = 3;
 
   // Wire pool events
@@ -272,6 +284,10 @@ export async function scan(options: ScanOptions): Promise<number> {
 
     if (result.status === STATUS.COMPLETED) {
       consecutiveAuthErrors = 0;
+      if (rateLimitPaused) {
+        rateLimitPaused = false;
+        printEventAboveProgress("Rate limit cleared. Resuming scan.");
+      }
       updateFileStatus(state, file, STATUS.COMPLETED, {
         completedAt: new Date().toISOString(),
         durationMs: result.durationMs,
@@ -313,6 +329,18 @@ export async function scan(options: ScanOptions): Promise<number> {
           );
           pool.killAll();
         }
+      } else if (result.error === "rate_limit" || result.error === "overloaded") {
+        // Requeue the file and pause — will auto-resume in 15 min
+        pool.requeueFile(file);
+        updateFileStatus(state, file, STATUS.PENDING);
+        if (!rateLimitPaused) {
+          rateLimitPaused = true;
+          pool.pause();
+          printEventAboveProgress(
+            "Rate limited. Will auto-resume when ready.",
+          );
+          scheduleRateLimitRetry();
+        }
       } else {
         consecutiveAuthErrors = 0;
       }
@@ -328,6 +356,7 @@ export async function scan(options: ScanOptions): Promise<number> {
   // Cleanup
   clearInterval(checkpointInterval);
   if (progressInterval) clearInterval(progressInterval);
+  if (rateLimitTimer) clearTimeout(rateLimitTimer);
   clearProgress();
   process.removeListener("SIGINT", handleSignal);
   process.removeListener("SIGTERM", handleSignal);

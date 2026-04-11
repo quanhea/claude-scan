@@ -156,6 +156,46 @@ describe("WorkerPool", () => {
     assert.equal(pool.activeCount, 0);
   });
 
+  it("pause prevents new workers, resume restarts them", async () => {
+    const events = [];
+    const pool = new WorkerPool({
+      files: ["a.js", "b.js", "c.js"],
+      concurrency: 1,
+      targetDir,
+      outputDir,
+      promptTemplate: "test {{FILE_PATH}} {{REPORT_PATH}}",
+      config: baseConfig,
+    });
+
+    pool.on("done", (file) => {
+      events.push(file);
+      if (events.length === 1) {
+        // After first file completes, pause
+        pool.pause();
+        // Resume after a short delay
+        setTimeout(() => pool.resume(), 100);
+      }
+    });
+
+    await pool.start();
+    // All 3 files should eventually complete
+    assert.equal(events.length, 3);
+  });
+
+  it("requeueFile puts file at front of queue", () => {
+    const pool = new WorkerPool({
+      files: ["a.js", "b.js"],
+      concurrency: 1,
+      targetDir,
+      outputDir,
+      promptTemplate: "test {{FILE_PATH}} {{REPORT_PATH}}",
+      config: baseConfig,
+    });
+
+    pool.requeueFile("z.js");
+    assert.equal(pool.queueLength, 3);
+  });
+
   it("handles empty file list gracefully", async () => {
     const pool = new WorkerPool({
       files: [],

@@ -149,6 +149,12 @@ response for `is_error` and classifies the error type (rate limit, auth,
 overloaded, generic). This classification drives retry behavior in `scanner.ts`
 and adaptive concurrency in `worker-pool.ts`.
 
+**Rate limit auto-pause.** When a 429 rate limit is detected, the scanner
+pauses the pool, requeues the failed file, and silently retries every 15
+minutes until the limit clears. The user sees one message ("Rate limited.
+Will auto-resume when ready.") and scanning resumes automatically. No manual
+intervention needed — Ctrl+C still works during the wait.
+
 **Graceful shutdown.** Signal handling spans `scanner.ts` (registers handlers,
 decides graceful vs. force) and `worker-pool.ts` (implements `stopAcceptingNew`
 and `killAll`). The pool doesn't know about signals — it just exposes controls

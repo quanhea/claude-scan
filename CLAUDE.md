@@ -53,6 +53,7 @@ scanner.ts       → top-level orchestrator tying everything together
 - **`--no-session-persistence`** — don't save session files for each of potentially thousands of scans
 - **Two-phase summary** — basic string-matched fallback first, then AI-powered deduplication/ranking via `prompts/summary.md`
 - **Interactive resume prompt** — if `.claude-scan/state.json` exists with incomplete files and user didn't pass `--resume`, prompts "Resume? [y/N]" (TTY only, skipped in CI/piped)
+- **Rate limit auto-pause** — on 429, pauses pool, requeues file, silently retries every 15 min until limit clears
 
 ### State Machine (per file)
 

@@ -134,6 +134,8 @@ claude-scan --resume --retry
 - 1st Ctrl+C — stops the queue, waits for running scans to finish
 - 2nd Ctrl+C — kills all workers immediately, saves state, exits
 
+If the API rate limit is hit, the scan pauses automatically and retries every 15 minutes until the limit clears — no manual intervention needed.
+
 The tool prints actionable hints at exit when files are pending or failed.
 
 ## Custom Prompts

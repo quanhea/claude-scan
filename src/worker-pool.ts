@@ -21,6 +21,7 @@ export class WorkerPool extends EventEmitter {
   private promptTemplate: string;
   private config: ScanConfig;
   private stopped = false;
+  private paused = false;
   private drainResolve: (() => void) | null = null;
   private consecutiveSuccesses = 0;
 
@@ -65,6 +66,19 @@ export class WorkerPool extends EventEmitter {
     });
   }
 
+  pause(): void {
+    this.paused = true;
+  }
+
+  resume(): void {
+    this.paused = false;
+    this.fillWorkers();
+  }
+
+  requeueFile(file: string): void {
+    this.queue.unshift(file);
+  }
+
   stopAcceptingNew(): void {
     this.stopped = true;
     this.queue = [];
@@ -81,6 +95,7 @@ export class WorkerPool extends EventEmitter {
   private fillWorkers(): void {
     while (
       !this.stopped &&
+      !this.paused &&
       this.active.size < this.concurrency &&
       this.queue.length > 0
     ) {
