@@ -26,24 +26,24 @@
 - [x] Test: concurrency limiting, queue drain, worker reuse after completion
 
 ## 7. Progress Display
-- [ ] progress.ts — TTY mode (in-place update: progress bar, per-worker status, findings count, elapsed/ETA) vs non-TTY mode (simple log lines)
-- [ ] Test: non-TTY log line formatting
+- [x] progress.ts — TTY mode (in-place update: progress bar, per-worker status, findings count, elapsed/ETA) vs non-TTY mode (simple log lines)
+- [x] Test: non-TTY log line formatting
 
 ## 8. Report Aggregator
-- [ ] reporter.ts — scan all report files, parse findings count/severity, generate summary.md, sort by severity
-- [ ] Test: summary generation from fixture report files
+- [x] reporter.ts — scan all report files, parse findings count/severity, generate summary.md, sort by severity
+- [x] Test: summary generation from fixture report files
 
 ## 9. Scanner Orchestrator
-- [ ] scanner.ts — ties everything together: preflight → discovery → state init/resume → pool start → wait → aggregate → cleanup lock
-- [ ] Test: dry-run mode returns file list without scanning
+- [x] scanner.ts — ties everything together: preflight → discovery → state init/resume → pool start → wait → aggregate → cleanup lock
+- [x] Test: dry-run mode returns file list without scanning
 
 ## 10. CLI Entry Point
-- [ ] cli.ts — parse args (target-dir, --parallel, --timeout, --resume, --include, --exclude, --output, --model, --max-turns, --max-file-size, --retries, --dry-run, --prompt, --verbose, --force), call scanner, handle top-level errors, exit codes
-- [ ] Test: arg parsing, --help output, missing target error
+- [x] cli.ts — parse args (target-dir, --parallel, --timeout, --resume, --include, --exclude, --output, --model, --max-turns, --max-file-size, --retries, --dry-run, --prompt, --verbose, --force), call scanner, handle top-level errors, exit codes
+- [x] Test: arg parsing, --help output, missing target error
 
 ## 11. Signal Handling
-- [ ] Wire SIGINT/SIGTERM into scanner.ts: 1st Ctrl+C → stop queue, wait for running. 2nd Ctrl+C → kill all, save state, exit(130)
-- [ ] Test: verify state is saved on simulated shutdown
+- [x] Wire SIGINT/SIGTERM into scanner.ts: 1st Ctrl+C → stop queue, wait for running. 2nd Ctrl+C → kill all, save state, exit(130)
+- [ ] Test: verify state is saved on simulated shutdown (covered by pool killAll test)
 
 ## 12. Integration & Polish
 - [ ] End-to-end test: scan a tiny fixture project with a mock claude script
