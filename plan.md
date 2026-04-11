@@ -14,16 +14,16 @@
 - [x] Test: extension filtering, ignore patterns, size filtering, binary detection, matchGlob
 
 ## 4. State Management
-- [ ] state.ts — initState, loadState, saveState (atomic: write tmp → fsync → rename), resetStaleRunning, recomputeStats, version check
-- [ ] Test: atomic write safety, state round-trip, resume logic (RUNNING → PENDING reset), stats recomputation
+- [x] state.ts — initState, loadState, saveState (atomic: write tmp → fsync → rename), resetStaleRunning, recomputeStats, version check
+- [x] Test: atomic write safety, state round-trip, resume logic (RUNNING → PENDING reset), stats recomputation
 
 ## 5. Worker (single Claude process)
-- [ ] worker.ts — spawnClaude (child_process.spawn with all flags), output streaming to log file, timeout timer, hang detection, exit code handling, report file existence check
-- [ ] Test: timeout kills process, exit code classification (success/failure/timeout)
+- [x] worker.ts — spawnClaude (child_process.spawn with all flags), output streaming to log file, timeout timer, hang detection, exit code handling, report file existence check
+- [x] Test: timeout kills process, exit code classification (success/failure/timeout)
 
 ## 6. Worker Pool
-- [ ] worker-pool.ts — EventEmitter, manages queue of pending files, spawns up to N workers, on worker done → dequeue next, adaptive concurrency on rate limit, drain + idle detection
-- [ ] Test: concurrency limiting, queue drain, worker reuse after completion
+- [x] worker-pool.ts — EventEmitter, manages queue of pending files, spawns up to N workers, on worker done → dequeue next, adaptive concurrency on rate limit, drain + idle detection
+- [x] Test: concurrency limiting, queue drain, worker reuse after completion
 
 ## 7. Progress Display
 - [ ] progress.ts — TTY mode (in-place update: progress bar, per-worker status, findings count, elapsed/ETA) vs non-TTY mode (simple log lines)
