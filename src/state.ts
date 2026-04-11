@@ -128,6 +128,18 @@ export function resetFailed(state: ScanState): number {
   return count;
 }
 
+export function mergeNewFiles(state: ScanState, files: string[]): number {
+  let count = 0;
+  for (const f of files) {
+    if (!state.files[f]) {
+      state.files[f] = { status: STATUS.PENDING, attempts: 0 };
+      count++;
+    }
+  }
+  state.stats = computeStats(state.files);
+  return count;
+}
+
 export function updateFileStatus(
   state: ScanState,
   filePath: string,

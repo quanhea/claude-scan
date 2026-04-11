@@ -10,6 +10,7 @@ import {
   saveState,
   resetStaleRunning,
   resetFailed,
+  mergeNewFiles,
   updateFileStatus,
   getPendingFiles,
   markForRetry,
@@ -87,6 +88,12 @@ export async function scan(options: ScanOptions): Promise<number> {
       if (retryCount > 0) {
         console.log(`Retry: reset ${retryCount} failed/timed-out files to pending.`);
       }
+    }
+    // Re-run discovery and merge new files (e.g. --include-tests on second run)
+    const freshFiles = discoverFiles(absTarget, { include, exclude, maxFileSizeKB, includeTests });
+    const newCount = mergeNewFiles(state, freshFiles);
+    if (newCount > 0) {
+      console.log(`Found ${newCount} new files to scan.`);
     }
     // Apply new config overrides
     state.config = config;

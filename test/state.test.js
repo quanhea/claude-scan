@@ -10,6 +10,7 @@ const {
   loadState,
   resetStaleRunning,
   resetFailed,
+  mergeNewFiles,
   updateFileStatus,
   getPendingFiles,
   markForRetry,
@@ -162,6 +163,29 @@ describe("resetFailed", () => {
     const state = initState("/tmp/p", ["a.ts"], testConfig);
     state.files["a.ts"].status = "COMPLETED";
     const count = resetFailed(state);
+    assert.equal(count, 0);
+  });
+});
+
+describe("mergeNewFiles", () => {
+  it("adds new files as PENDING without touching existing", () => {
+    const state = initState("/tmp/p", ["a.ts", "b.ts"], testConfig);
+    state.files["a.ts"].status = "COMPLETED";
+    state.files["a.ts"].attempts = 1;
+
+    const count = mergeNewFiles(state, ["a.ts", "b.ts", "c.ts", "d.ts"]);
+    assert.equal(count, 2); // c.ts and d.ts are new
+    assert.equal(state.files["a.ts"].status, "COMPLETED"); // untouched
+    assert.equal(state.files["a.ts"].attempts, 1);
+    assert.equal(state.files["c.ts"].status, "PENDING");
+    assert.equal(state.files["c.ts"].attempts, 0);
+    assert.equal(state.files["d.ts"].status, "PENDING");
+    assert.equal(state.stats.totalFiles, 4);
+  });
+
+  it("returns 0 when no new files", () => {
+    const state = initState("/tmp/p", ["a.ts"], testConfig);
+    const count = mergeNewFiles(state, ["a.ts"]);
     assert.equal(count, 0);
   });
 });
