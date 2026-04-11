@@ -89,7 +89,7 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
 ## Options
 
 ```
-  -j, --parallel <n>        Parallel workers            (default: 4)
+  -j, --parallel <n>        Parallel workers            (default: 12)
   -t, --timeout <seconds>   Per-file timeout            (default: 300)
       --resume               Resume pending files from a previous scan
       --retry                Retry failed/timed-out files (use with --resume)

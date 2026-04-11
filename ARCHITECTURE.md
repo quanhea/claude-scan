@@ -80,13 +80,12 @@ concurrency: on rate-limit errors it reduces parallelism by 1; after 5
 consecutive successes it restores it. Emits `start`, `done`, and `drain`
 events consumed by `scanner.ts`.
 
-**`worker.ts`** — Spawns a single `claude -p` child process for one file.
-Constructs the CLI args (`--dangerously-skip-permissions`,
+**`worker.ts`** — Contains `spawnClaude()`, the shared core that spawns any
+`claude -p` process. Builds CLI args (`--dangerously-skip-permissions`,
 `--max-turns`, `--output-format json`, `--no-session-persistence`), pipes
-stdout/stderr directly to a log file (never buffered in memory), runs a
-timeout timer, and classifies the exit into COMPLETED / FAILED / TIMEOUT.
-Returns a `{ child, promise, kill }` triple so the pool can await or
-force-terminate it.
+stdout/stderr to a log file, runs a timeout timer, parses the JSON response
+for `is_error` and cost, and classifies errors. Both the per-file scan
+(`spawnWorker()` thin wrapper) and the AI summary (`reporter.ts`) use it.
 
 ### Support Modules
 
@@ -138,18 +137,17 @@ these, it's a bug.
 - **The tool never modifies the target project.** It reads source files and
   nothing else. All output goes to `.claude-scan/` (or the `--output` path).
 
-- **Claude invocations use `--bare` and `--no-session-persistence`.** `--bare`
-  skips hooks, plugins, MCP servers, and CLAUDE.md discovery on every spawn —
-  critical for startup speed when launching hundreds of processes.
-  `--no-session-persistence` prevents Claude from saving a session file per
-  invocation.
+- **Claude invocations use `--no-session-persistence`.** This prevents Claude
+  from saving a session file per invocation — important when launching hundreds
+  of processes. (`--bare` was considered but breaks authentication on claude.ai
+  accounts.)
 
 ## Cross-Cutting Concerns
 
-**Error classification.** When a worker fails, `worker.ts` reads the last 1KB
-of the log to classify the error (rate limit, auth, overloaded, generic). This
-classification drives retry behavior in `scanner.ts` and adaptive concurrency
-in `worker-pool.ts`.
+**Error classification.** When a worker fails, `spawnClaude()` parses the JSON
+response for `is_error` and classifies the error type (rate limit, auth,
+overloaded, generic). This classification drives retry behavior in `scanner.ts`
+and adaptive concurrency in `worker-pool.ts`.
 
 **Graceful shutdown.** Signal handling spans `scanner.ts` (registers handlers,
 decides graceful vs. force) and `worker-pool.ts` (implements `stopAcceptingNew`

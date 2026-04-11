@@ -336,7 +336,7 @@ flowchart TD
     A --> D["State Object"]
     A --> E["Child Cleanup"]
 
-    B --> B1["Cap --parallel<br/>default 4, warn at 16+"]
+    B --> B1["Cap --parallel<br/>default 12, warn at 32+"]
     C --> C1["Stream output directly to<br/>log files via child.stdout.pipe().<br/>Never buffer in memory."]
     D --> D1["State object: file path + enum status<br/>~100 bytes per file.<br/>10,000 files = 1 MB. Fine."]
     E --> E1["On child exit: remove from<br/>active map, close streams,<br/>unreference child."]

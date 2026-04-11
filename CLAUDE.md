@@ -31,10 +31,10 @@ Defined in detail in `docs/architecture/`. Follow these docs — they are the so
 ```
 cli.ts           → arg parsing, orchestrates the scan pipeline
 preflight.ts     → validates: claude installed? authenticated? target exists? lock file?
-discovery.ts     → finds files to scan (git ls-files or glob, filters by extension/size/binary)
+discovery.ts     → finds files to scan (git ls-files or glob, filters by extension/size/binary/test-patterns)
 state.ts         → state persistence (state.json), atomic writes, resume logic
 worker-pool.ts   → manages N concurrent claude child processes
-worker.ts        → spawns a single claude -p process, handles timeout/hang/exit
+worker.ts        → spawnClaude() shared core + spawnWorker() thin wrapper per file
 reporter.ts      → basic summary fallback + AI-powered summary via prompts/summary.md
 progress.ts      → terminal progress display (TTY vs piped)
 types.ts         → shared types, constants, status enum, defaults

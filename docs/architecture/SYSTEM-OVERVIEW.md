@@ -51,7 +51,7 @@ Parses arguments, validates config, and orchestrates the scan pipeline.
 claude-scan <target-dir> [options]
 
 Options:
-  -j, --parallel <n>        Parallel workers           (default: 4)
+  -j, --parallel <n>        Parallel workers           (default: 12)
   -t, --timeout <seconds>   Per-file timeout           (default: 300)
       --resume               Resume a previous scan
       --include <glob>       Only scan matching files
