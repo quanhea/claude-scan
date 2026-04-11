@@ -21,7 +21,10 @@ import {
   isTTY,
   printLogLine,
   printTTYProgress,
+  printEventAboveProgress,
+  clearProgress,
   formatDuration,
+  formatLogLine,
 } from "./progress";
 
 export async function scan(options: ScanOptions): Promise<number> {
@@ -148,6 +151,8 @@ export async function scan(options: ScanOptions): Promise<number> {
         stats: state.stats,
         activeFiles,
         elapsed: Date.now() - startTime,
+        concurrency: parallel,
+        reportsDir: path.join(absOutput, "reports"),
       });
     }, 500);
   }
@@ -181,54 +186,69 @@ export async function scan(options: ScanOptions): Promise<number> {
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
 
+  // Fatal error detection — halt on auth failures
+  let consecutiveAuthErrors = 0;
+  const FATAL_AUTH_THRESHOLD = 3;
+
   // Wire pool events
-  pool.on("start", (file: string, workerIndex: number) => {
+  pool.on("start", (file: string, _workerIndex: number) => {
     activeStartTimes.set(file, Date.now());
     updateFileStatus(state, file, STATUS.RUNNING, {
       startedAt: new Date().toISOString(),
       attempts: (state.files[file]?.attempts ?? 0) + 1,
     });
-    if (!isTTY) {
-      printLogLine("START", file, `worker ${workerIndex + 1}`);
-    }
   });
 
-  pool.on("done", (file: string, result: { status: string; durationMs: number; exitCode: number | null; error?: string }, workerIndex: number) => {
+  pool.on("done", (file: string, result: { status: string; durationMs: number; exitCode: number | null; error?: string }, _workerIndex: number) => {
     activeStartTimes.delete(file);
 
     const reportPath = path.join(absOutput, "reports", fileToSlug(file) + ".md");
 
     if (result.status === STATUS.COMPLETED) {
+      consecutiveAuthErrors = 0;
       updateFileStatus(state, file, STATUS.COMPLETED, {
         completedAt: new Date().toISOString(),
         durationMs: result.durationMs,
         exitCode: result.exitCode,
         reportPath,
       });
-      if (!isTTY) {
-        printLogLine("DONE", file, `${formatDuration(result.durationMs)}`);
-      }
+      printEventAboveProgress(
+        formatLogLine("DONE", file, formatDuration(result.durationMs)),
+      );
     } else if (result.status === STATUS.TIMEOUT) {
+      consecutiveAuthErrors = 0;
       updateFileStatus(state, file, STATUS.TIMEOUT, {
         completedAt: new Date().toISOString(),
         durationMs: result.durationMs,
         exitCode: result.exitCode,
         lastError: "timeout",
       });
-      markForRetry(state, file, maxRetries);
-      if (!isTTY) {
-        printLogLine("TIMEOUT", file, `exceeded ${timeout}s`);
-      }
+      printEventAboveProgress(
+        formatLogLine("TIMEOUT", file, `exceeded ${timeout}s`),
+      );
     } else {
+      // FAILED
       updateFileStatus(state, file, STATUS.FAILED, {
         completedAt: new Date().toISOString(),
         durationMs: result.durationMs,
         exitCode: result.exitCode,
         lastError: result.error,
       });
-      markForRetry(state, file, maxRetries);
-      if (!isTTY) {
-        printLogLine("FAIL", file, result.error ?? "unknown error");
+      printEventAboveProgress(
+        formatLogLine("FAIL", file, result.error ?? "unknown error"),
+      );
+
+      // Detect fatal auth errors — halt the entire scan
+      if (result.error === "auth_error") {
+        consecutiveAuthErrors++;
+        if (consecutiveAuthErrors >= FATAL_AUTH_THRESHOLD) {
+          printEventAboveProgress(
+            "Error: Claude is not authenticated. Run: claude auth login",
+          );
+          pool.killAll();
+        }
+      } else {
+        consecutiveAuthErrors = 0;
       }
     }
 
@@ -242,6 +262,7 @@ export async function scan(options: ScanOptions): Promise<number> {
   // Cleanup
   clearInterval(checkpointInterval);
   if (progressInterval) clearInterval(progressInterval);
+  clearProgress();
   process.removeListener("SIGINT", handleSignal);
   process.removeListener("SIGTERM", handleSignal);
 
@@ -254,7 +275,6 @@ export async function scan(options: ScanOptions): Promise<number> {
 
   // Final output
   const elapsed = formatDuration(Date.now() - startTime);
-  console.log("");
   console.log(
     `Done. ${state.stats.completed} files scanned in ${elapsed}.`,
   );
@@ -264,6 +284,24 @@ export async function scan(options: ScanOptions): Promise<number> {
     );
   }
   console.log(`  Summary: ${summaryPath}`);
+
+  // Completed files list
+  const completedFiles = Object.entries(state.files)
+    .filter(([, e]) => e.status === STATUS.COMPLETED)
+    .sort(([, a], [, b]) => (a.durationMs ?? 0) - (b.durationMs ?? 0));
+
+  if (completedFiles.length > 0) {
+    console.log("");
+    console.log(`  Completed (${completedFiles.length}):`);
+    const SHOW_MAX = 10;
+    for (const [f, e] of completedFiles.slice(0, SHOW_MAX)) {
+      const dur = e.durationMs ? formatDuration(e.durationMs) : "";
+      console.log(`    ${f} (${dur})`);
+    }
+    if (completedFiles.length > SHOW_MAX) {
+      console.log(`    ... +${completedFiles.length - SHOW_MAX} more (see summary.md)`);
+    }
+  }
 
   removeLockFile(absOutput);
 

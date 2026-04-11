@@ -79,17 +79,21 @@ describe("renderTTYProgress", () => {
         ["src/db.ts", { index: 1, startedAt: Date.now() - 30000 }],
       ]),
       elapsed: 300000,
+      concurrency: 4,
+      reportsDir: "/tmp/out/reports",
     };
 
-    const output = renderTTYProgress(state);
+    const lines = renderTTYProgress(state);
+    const output = lines.join("\n");
     assert.ok(output.includes("43/100"));
     assert.ok(output.includes("43.0%"));
     assert.ok(output.includes("Worker 1"));
     assert.ok(output.includes("src/auth.ts"));
     assert.ok(output.includes("Worker 2"));
     assert.ok(output.includes("src/db.ts"));
-    assert.ok(output.includes("Completed: 40"));
+    assert.ok(output.includes("Done: 40"));
     assert.ok(output.includes("Failed: 2"));
+    assert.ok(output.includes("/tmp/out/reports"));
   });
 
   it("shows idle workers", () => {
@@ -107,9 +111,13 @@ describe("renderTTYProgress", () => {
         ["a.ts", { index: 0, startedAt: Date.now() }],
       ]),
       elapsed: 0,
+      concurrency: 2,
+      reportsDir: "/tmp/reports",
     };
 
-    const output = renderTTYProgress(state);
-    assert.ok(output.includes("Worker 1: ●"));
+    const lines = renderTTYProgress(state);
+    const output = lines.join("\n");
+    assert.ok(output.includes("Worker 1:"));
+    assert.ok(output.includes("a.ts"));
   });
 });

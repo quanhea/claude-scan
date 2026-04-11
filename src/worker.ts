@@ -41,9 +41,9 @@ export function spawnWorker(options: SpawnOptions): {
   const prompt = renderPrompt(promptTemplate, absFilePath, reportPath);
 
   // Build claude args
+  // NOTE: do NOT use --bare — it breaks authentication on claude.ai accounts
   const args: string[] = [
     "--dangerously-skip-permissions",
-    "--bare",
     "-p",
     prompt,
     "--max-turns",
@@ -73,11 +73,14 @@ export function spawnWorker(options: SpawnOptions): {
   let timeoutTimer: NodeJS.Timeout | null = null;
   let hangTimer: NodeJS.Timeout | null = null;
   let lastActivity = Date.now();
+  // Keep only the last stdout chunk for JSON parsing (small, not a leak)
+  let lastStdoutChunk = "";
 
-  // Stream output to log file — never buffer in memory
+  // Stream output to log file — never buffer full history in memory
   if (child.stdout) {
-    child.stdout.on("data", () => {
+    child.stdout.on("data", (data: Buffer) => {
       lastActivity = Date.now();
+      lastStdoutChunk = data.toString();
     });
     child.stdout.pipe(logStream);
   }
@@ -113,14 +116,19 @@ export function spawnWorker(options: SpawnOptions): {
     }, config.timeout * 1000);
   }
 
-  // Hang detection: no output for 2 minutes
-  const HANG_CHECK_INTERVAL = 30_000;
-  const HANG_THRESHOLD = 120_000;
-  hangTimer = setInterval(() => {
-    if (Date.now() - lastActivity > HANG_THRESHOLD && !killed) {
-      kill();
-    }
-  }, HANG_CHECK_INTERVAL);
+  // Hang detection — only useful with --verbose (which streams output).
+  // With --output-format json, Claude produces no output until done,
+  // so hang detection would false-positive on every normal scan.
+  // The timeout timer is sufficient protection.
+  if (config.verbose) {
+    const HANG_CHECK_INTERVAL = 30_000;
+    const HANG_THRESHOLD = 120_000;
+    hangTimer = setInterval(() => {
+      if (Date.now() - lastActivity > HANG_THRESHOLD && !killed) {
+        kill();
+      }
+    }, HANG_CHECK_INTERVAL);
+  }
 
   const startTime = Date.now();
 
@@ -133,46 +141,58 @@ export function spawnWorker(options: SpawnOptions): {
       const durationMs = Date.now() - startTime;
       const exitCode = code ?? (signal ? 128 + (signalNumber(signal) || 0) : 1);
 
-      // Determine status
-      let status: string = STATUS.COMPLETED;
-      if (killed) {
-        status = STATUS.TIMEOUT;
-      } else if (exitCode !== 0) {
-        status = STATUS.FAILED;
-      }
-
-      // Try to save raw JSON output
+      // Try to save raw JSON output and parse it for is_error
+      let claudeIsError = false;
+      let claudeErrorMsg = "";
       try {
         if (fs.existsSync(logPath)) {
-          const logContent = fs.readFileSync(logPath, "utf-8");
-          // If output-format is json, the log contains json
+          const logContent = fs.readFileSync(logPath, "utf-8").trim();
           try {
-            JSON.parse(logContent);
-            fs.copyFileSync(logPath, path.join(rawDir, slug + ".json"));
+            const parsed = JSON.parse(logContent);
+            fs.writeFileSync(path.join(rawDir, slug + ".json"), logContent);
+            if (parsed.is_error) {
+              claudeIsError = true;
+              claudeErrorMsg = parsed.result || "";
+            }
           } catch {
-            // Not valid JSON, that's fine
+            // Not valid JSON — check for multi-line JSON (stream output)
           }
         }
       } catch {
         // Non-critical
       }
 
-      // Try to detect error type from log
+      // Determine status — check both exit code AND is_error from JSON
+      let status: string = STATUS.COMPLETED;
+      if (killed) {
+        status = STATUS.TIMEOUT;
+      } else if (exitCode !== 0 || claudeIsError) {
+        status = STATUS.FAILED;
+      }
+
+      // Detect error type
       let error: string | undefined;
       if (status === STATUS.FAILED) {
-        try {
-          const log = fs.readFileSync(logPath, "utf-8").slice(-1000);
-          if (log.includes("rate_limit") || log.includes("429")) {
-            error = "rate_limit";
-          } else if (log.includes("401") || log.includes("auth")) {
-            error = "auth_error";
-          } else if (log.includes("overloaded") || log.includes("529")) {
-            error = "overloaded";
-          } else {
+        if (claudeErrorMsg.includes("Not logged in") || claudeErrorMsg.includes("/login")) {
+          error = "auth_error";
+        } else if (claudeErrorMsg.includes("rate_limit") || claudeErrorMsg.includes("429")) {
+          error = "rate_limit";
+        } else if (claudeErrorMsg.includes("overloaded") || claudeErrorMsg.includes("529")) {
+          error = "overloaded";
+        } else {
+          // Fall back to log content
+          try {
+            const log = fs.readFileSync(logPath, "utf-8").slice(-1000);
+            if (log.includes("rate_limit") || log.includes("429")) {
+              error = "rate_limit";
+            } else if (log.includes("Not logged in") || log.includes("401")) {
+              error = "auth_error";
+            } else {
+              error = claudeErrorMsg || `exit_code_${exitCode}`;
+            }
+          } catch {
             error = `exit_code_${exitCode}`;
           }
-        } catch {
-          error = `exit_code_${exitCode}`;
         }
       }
 
