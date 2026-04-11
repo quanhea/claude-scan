@@ -135,8 +135,9 @@ export async function summarizeWithClaude(options: {
     SUMMARY_PATH: summaryPath,
   });
 
-  // Same spawnClaude as per-file scan — identical flags, identical behavior
-  const { promise } = spawnClaude({ prompt, cwd: outputDir, logPath, rawPath, config });
+  // Summary reads many files — use 30 min timeout instead of per-file timeout
+  const summaryConfig = { ...config, timeout: 1800 };
+  const { promise } = spawnClaude({ prompt, cwd: outputDir, logPath, rawPath, config: summaryConfig });
   const r = await promise;
 
   // Map result
