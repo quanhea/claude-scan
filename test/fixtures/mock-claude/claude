@@ -1,0 +1,46 @@
+#!/usr/bin/env node
+// Mock claude CLI for testing. Writes a fake report to the path specified in the prompt.
+const args = process.argv.slice(2);
+
+// Find the -p flag value
+const pIdx = args.indexOf("-p");
+if (pIdx === -1) {
+  // Handle --version
+  if (args.includes("--version")) {
+    console.log("1.0.0-mock");
+    process.exit(0);
+  }
+  // Handle auth status
+  if (args.includes("auth") && args.includes("status")) {
+    console.log(JSON.stringify({ authenticated: true }));
+    process.exit(0);
+  }
+  process.exit(0);
+}
+
+const prompt = args[pIdx + 1];
+if (!prompt) process.exit(1);
+
+// Extract report path from prompt (looks for "Write the most serious one to <path>")
+const match = prompt.match(/to (\S+\.md)/);
+if (match) {
+  const fs = require("fs");
+  const path = require("path");
+  const reportPath = match[1];
+  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+
+  // Extract file path from prompt
+  const fileMatch = prompt.match(/look at ([^\s]+)/);
+  const file = fileMatch ? fileMatch[1] : "unknown";
+
+  fs.writeFileSync(
+    reportPath,
+    `# Vulnerability Report: ${path.basename(file)}\n\n` +
+    `## High: Potential security issue\n\n` +
+    `Found a potential vulnerability in ${file}.\n`
+  );
+}
+
+// Output JSON like real claude
+console.log(JSON.stringify({ result: "analysis complete" }));
+process.exit(0);

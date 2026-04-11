@@ -43,9 +43,9 @@
 
 ## 11. Signal Handling
 - [x] Wire SIGINT/SIGTERM into scanner.ts: 1st Ctrl+C → stop queue, wait for running. 2nd Ctrl+C → kill all, save state, exit(130)
-- [ ] Test: verify state is saved on simulated shutdown (covered by pool killAll test)
+- [x] Test: verify state is saved on simulated shutdown (covered by pool killAll test)
 
 ## 12. Integration & Polish
-- [ ] End-to-end test: scan a tiny fixture project with a mock claude script
-- [ ] README.md
-- [ ] Final commit, verify npm pack produces clean tarball
+- [x] End-to-end test: scan a tiny fixture project with a mock claude script
+- [x] README.md
+- [x] Final commit, verify npm pack produces clean tarball (17.2 kB, 26 files)
