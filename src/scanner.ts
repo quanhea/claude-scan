@@ -19,7 +19,7 @@ import {
 } from "./state";
 import { WorkerPool } from "./worker-pool";
 import { fileToSlug } from "./worker";
-import { writeSummary, summarizeWithClaude } from "./reporter";
+import { writeSummary, summarizeWithClaude, SummarizeResult } from "./reporter";
 import {
   isTTY,
   printLogLine,
@@ -63,17 +63,20 @@ export async function scan(options: ScanOptions): Promise<number> {
     }
     const summaryPath = path.join(absOutput, "summary.md");
     try { fs.unlinkSync(summaryPath); } catch {}
-    console.log("Generating AI summary...");
-    const config = {
+    const sumConfig = {
       parallel, timeout, maxRetries, maxTurns, maxFileSizeKB,
       model, prompt: promptFile ?? DEFAULTS.prompt, verbose,
     };
-    try {
-      await summarizeWithClaude({ outputDir: absOutput, state: existingState, config });
-    } catch {
-      writeSummary(absOutput, existingState);
-    }
-    console.log(`Summary: ${summaryPath}`);
+    const sumStart = Date.now();
+    console.log("Generating AI summary...");
+    const result = await summarizeWithClaude({
+      outputDir: absOutput,
+      state: existingState,
+      config: sumConfig,
+      onLog: (msg) => console.log(`  ${msg}`),
+    });
+    printSummarizeResult(result, sumStart);
+    console.log(`  Summary: ${summaryPath}`);
     return 0;
   }
 
@@ -313,16 +316,16 @@ export async function scan(options: ScanOptions): Promise<number> {
   // Generate summary — basic fallback first, then AI-powered
   let summaryPath = writeSummary(absOutput, state);
   if (state.stats.completed > 0) {
+    const sumStart = Date.now();
     console.log("Generating AI summary...");
-    try {
-      summaryPath = await summarizeWithClaude({
-        outputDir: absOutput,
-        state,
-        config,
-      });
-    } catch {
-      // Keep the basic summary on failure
-    }
+    const sumResult = await summarizeWithClaude({
+      outputDir: absOutput,
+      state,
+      config,
+      onLog: (msg) => console.log(`  ${msg}`),
+    });
+    summaryPath = sumResult.summaryPath;
+    printSummarizeResult(sumResult, sumStart);
   }
 
   // Final output
@@ -371,4 +374,16 @@ export async function scan(options: ScanOptions): Promise<number> {
   removeLockFile(absOutput);
 
   return state.stats.failed > 0 ? 1 : 0;
+}
+
+function printSummarizeResult(result: SummarizeResult, startTime: number): void {
+  const elapsed = formatDuration(Date.now() - startTime);
+  if (result.success) {
+    const costStr = result.cost !== undefined ? ` ($${result.cost.toFixed(4)})` : "";
+    console.log(`  AI summary generated in ${elapsed}${costStr}`);
+  } else {
+    console.log(`  AI summary failed after ${elapsed}: ${result.error ?? "unknown"}`);
+    console.log("  Using basic fallback summary.");
+    console.log(`  Log: ${path.join(path.dirname(result.summaryPath), "logs", "summary.log")}`);
+  }
 }

@@ -17,9 +17,7 @@ export function parseReportFindings(reportPath: string, file: string): Finding[]
   const content = fs.readFileSync(reportPath, "utf-8").trim();
   if (!content || content === "No vulnerabilities found.") return [];
 
-  // Detect severity from report content
   const severity = detectSeverity(content);
-
   return [{ file, severity, content }];
 }
 
@@ -30,24 +28,6 @@ function detectSeverity(content: string): string {
   if (lower.includes("medium")) return "Medium";
   if (lower.includes("low")) return "Low";
   return "Unknown";
-}
-
-export function countFindings(outputDir: string, state: ScanState): number {
-  const reportsDir = path.join(outputDir, "reports");
-  if (!fs.existsSync(reportsDir)) return 0;
-
-  let count = 0;
-  for (const [file, entry] of Object.entries(state.files)) {
-    if (entry.status !== STATUS.COMPLETED) continue;
-    if (!entry.reportPath) continue;
-    if (!fs.existsSync(entry.reportPath)) continue;
-
-    const content = fs.readFileSync(entry.reportPath, "utf-8").trim();
-    if (content && content !== "No vulnerabilities found.") {
-      count++;
-    }
-  }
-  return count;
 }
 
 export function generateSummary(outputDir: string, state: ScanState): string {
@@ -72,7 +52,6 @@ export function generateSummary(outputDir: string, state: ScanState): string {
   lines.push(`| Skipped | ${state.stats.skipped} |`);
   lines.push("");
 
-  // Collect all findings
   const allFindings: Finding[] = [];
   if (fs.existsSync(reportsDir)) {
     for (const [file, entry] of Object.entries(state.files)) {
@@ -93,7 +72,6 @@ export function generateSummary(outputDir: string, state: ScanState): string {
     lines.push(`**${allFindings.length} files with findings**`);
     lines.push("");
 
-    // Group by severity
     for (const severity of severityOrder) {
       const group = allFindings.filter((f) => f.severity === severity);
       if (group.length === 0) continue;
@@ -107,7 +85,6 @@ export function generateSummary(outputDir: string, state: ScanState): string {
     }
   }
 
-  // Failed files section
   const failedFiles = Object.entries(state.files)
     .filter(([, e]) => e.status === STATUS.FAILED || e.status === STATUS.TIMEOUT)
     .map(([f, e]) => ({ file: f, status: e.status, error: e.lastError }));
@@ -131,20 +108,42 @@ export function writeSummary(outputDir: string, state: ScanState): string {
   return summaryPath;
 }
 
+export interface SummarizeResult {
+  success: boolean;
+  summaryPath: string;
+  durationMs: number;
+  exitCode: number | null;
+  error?: string;
+  claudeResult?: string;
+  cost?: number;
+}
+
 export async function summarizeWithClaude(options: {
   outputDir: string;
   state: ScanState;
   config: ScanConfig;
-}): Promise<string> {
-  const { outputDir, state, config } = options;
+  onLog?: (msg: string) => void;
+}): Promise<SummarizeResult> {
+  const { outputDir, state, config, onLog } = options;
   const reportsDir = path.join(outputDir, "reports");
   const summaryPath = path.join(outputDir, "summary.md");
+  const logPath = path.join(outputDir, "logs", "summary.log");
+  const rawPath = path.join(outputDir, "raw", "summary.json");
+  const startTime = Date.now();
 
-  // Only run if there are completed reports
-  const hasReports = Object.values(state.files).some(
-    (e) => e.status === STATUS.COMPLETED && e.reportPath && fs.existsSync(e.reportPath),
-  );
-  if (!hasReports) return summaryPath;
+  const log = (msg: string) => { if (onLog) onLog(msg); };
+
+  // Check for completed reports
+  const reportFiles = Object.values(state.files)
+    .filter((e) => e.status === STATUS.COMPLETED && e.reportPath && fs.existsSync(e.reportPath));
+
+  if (reportFiles.length === 0) {
+    log("No completed reports to summarize.");
+    writeSummary(outputDir, state);
+    return { success: false, summaryPath, durationMs: 0, exitCode: null, error: "no_reports" };
+  }
+
+  log(`Reading ${reportFiles.length} report files...`);
 
   // Load and render the summary prompt
   const template = loadPrompt("summary.md");
@@ -166,48 +165,108 @@ export async function summarizeWithClaude(options: {
 
   if (config.model) {
     args.push("--model", config.model);
+    log(`Using model: ${config.model}`);
   }
 
-  const logPath = path.join(outputDir, "logs", "summary.log");
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  fs.mkdirSync(path.dirname(rawPath), { recursive: true });
   const logStream = fs.createWriteStream(logPath, { flags: "w" });
 
-  return new Promise<string>((resolve) => {
+  return new Promise<SummarizeResult>((resolve) => {
+    log("Spawning Claude for summary generation...");
+
     const child = spawn("claude", args, {
       cwd: outputDir,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
     });
 
-    if (child.stdout) child.stdout.pipe(logStream);
-    if (child.stderr) child.stderr.pipe(logStream);
+    let lastStdoutChunk = "";
 
-    const timeout = setTimeout(() => {
+    if (child.stdout) {
+      child.stdout.on("data", (data: Buffer) => {
+        lastStdoutChunk = data.toString();
+      });
+      child.stdout.pipe(logStream);
+    }
+    if (child.stderr) {
+      child.stderr.pipe(logStream);
+    }
+
+    const timeoutTimer = setTimeout(() => {
+      log(`Timeout after ${config.timeout}s — killing summary process.`);
       try { child.kill("SIGTERM"); } catch {}
     }, config.timeout * 1000);
 
     child.on("exit", (code) => {
-      clearTimeout(timeout);
+      clearTimeout(timeoutTimer);
       logStream.end();
 
-      if (code === 0 && fs.existsSync(summaryPath)) {
-        // Check if Claude actually wrote something meaningful
+      const durationMs = Date.now() - startTime;
+
+      // Parse JSON response for details
+      let claudeResult: string | undefined;
+      let cost: number | undefined;
+      let isError = false;
+
+      try {
+        const raw = lastStdoutChunk.trim() || fs.readFileSync(logPath, "utf-8").trim();
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          fs.writeFileSync(rawPath, JSON.stringify(parsed, null, 2));
+          claudeResult = parsed.result;
+          cost = parsed.total_cost_usd;
+          isError = parsed.is_error === true;
+
+          if (isError) {
+            log(`Claude error: ${parsed.result}`);
+          } else if (cost !== undefined) {
+            log(`Cost: $${cost.toFixed(4)}`);
+          }
+        }
+      } catch {
+        // Not JSON
+      }
+
+      if (isError || code !== 0) {
+        const errMsg = claudeResult || `exit_code_${code}`;
+        log(`Summary generation failed: ${errMsg}`);
+        writeSummary(outputDir, state);
+        resolve({ success: false, summaryPath, durationMs, exitCode: code, error: errMsg, claudeResult, cost });
+        return;
+      }
+
+      // Verify Claude wrote something meaningful
+      if (fs.existsSync(summaryPath)) {
         const content = fs.readFileSync(summaryPath, "utf-8").trim();
         if (content.length > 50) {
-          resolve(summaryPath);
+          log("AI summary written successfully.");
+          resolve({ success: true, summaryPath, durationMs, exitCode: code, claudeResult, cost });
           return;
         }
       }
 
-      // Fallback: write the basic summary
+      // Claude succeeded but didn't write the file — check if result contains the summary
+      if (claudeResult && claudeResult.length > 100) {
+        log("Claude returned summary in response (didn't write file). Writing it.");
+        fs.writeFileSync(summaryPath, claudeResult);
+        resolve({ success: true, summaryPath, durationMs, exitCode: code, claudeResult, cost });
+        return;
+      }
+
+      log("Claude completed but no summary was produced. Using basic fallback.");
       writeSummary(outputDir, state);
-      resolve(summaryPath);
+      resolve({ success: false, summaryPath, durationMs, exitCode: code, error: "no_output", claudeResult, cost });
     });
 
-    child.on("error", () => {
-      clearTimeout(timeout);
+    child.on("error", (err) => {
+      clearTimeout(timeoutTimer);
       logStream.end();
+      const durationMs = Date.now() - startTime;
+      const errMsg = err.message.includes("ENOENT") ? "claude not found" : err.message;
+      log(`Spawn error: ${errMsg}`);
       writeSummary(outputDir, state);
-      resolve(summaryPath);
+      resolve({ success: false, summaryPath, durationMs, exitCode: null, error: errMsg });
     });
   });
 }
