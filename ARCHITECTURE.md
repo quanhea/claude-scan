@@ -44,8 +44,10 @@ only module that calls `process.exit()`.
 read first after this file. It wires together every other module: runs
 preflight checks, discovers files, initializes or resumes state, creates the
 worker pool, subscribes to pool events to update state, handles SIGINT/SIGTERM,
-and generates the final summary. The two signal handlers live here (first
-Ctrl+C stops the queue; second kills all workers).
+and generates the final summary. If an incomplete previous scan exists and the
+user didn't pass `--resume`, it prompts interactively (TTY only). The two
+signal handlers live here (first Ctrl+C stops the queue; second kills all
+workers).
 
 **`preflight.ts`** — Validates that `claude` is installed and authenticated,
 the target directory exists, and no other scan is running (via a lock file

@@ -118,6 +118,12 @@ claude-scan ./my-project --resume
 
 Completed files are never re-scanned. Files that were mid-scan reset to pending.
 
+If you run `claude-scan` on a repo with an incomplete previous scan, it will prompt:
+
+```
+Previous scan found: 42/66 completed. Resume previous scan? [y/N]
+```
+
 To also retry files that failed or timed out:
 
 ```bash

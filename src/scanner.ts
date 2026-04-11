@@ -1,6 +1,7 @@
 // src/scanner.ts — top-level orchestrator
 import * as fs from "fs";
 import * as path from "path";
+import * as readline from "readline";
 import { ScanOptions, STATUS, DEFAULTS } from "./types";
 import { runPreflight, removeLockFile } from "./preflight";
 import { discoverFiles } from "./discovery";
@@ -45,12 +46,12 @@ export async function scan(options: ScanOptions): Promise<number> {
     exclude,
     includeTests,
     summarize,
-    resume,
     retry,
     dryRun,
     force,
     verbose,
   } = options;
+  let resume = options.resume;
 
   const absTarget = path.resolve(targetDir);
   const absOutput = path.resolve(outputDir);
@@ -67,15 +68,15 @@ export async function scan(options: ScanOptions): Promise<number> {
       parallel, timeout, maxRetries, maxTurns, maxFileSizeKB,
       model, prompt: promptFile ?? DEFAULTS.prompt, verbose,
     };
-    const sumStart = Date.now();
-    console.log("Generating AI summary...");
+    const modelLabel = model ? ` (${model})` : "";
+    process.stdout.write(`Generating AI summary${modelLabel}...`);
+    const ticker = setInterval(() => process.stdout.write("."), 3000);
     const result = await summarizeWithClaude({
-      outputDir: absOutput,
-      state: existingState,
-      config: sumConfig,
-      onLog: (msg) => console.log(`  ${msg}`),
+      outputDir: absOutput, state: existingState, config: sumConfig,
     });
-    printSummarizeResult(result, sumStart);
+    clearInterval(ticker);
+    console.log("");
+    printSummarizeResult(result);
     console.log(`  Summary: ${summaryPath}`);
     return 0;
   }
@@ -97,6 +98,23 @@ export async function scan(options: ScanOptions): Promise<number> {
     prompt: promptFile ?? DEFAULTS.prompt,
     verbose,
   };
+
+  // Check for existing scan — prompt to resume if incomplete
+  if (!resume && !dryRun && !summarize && process.stdin.isTTY) {
+    const existing = loadState(absOutput);
+    if (existing) {
+      const done = existing.stats.completed;
+      const total = existing.stats.totalFiles;
+      const incomplete = total - done;
+      if (incomplete > 0) {
+        console.log(`Previous scan found: ${done}/${total} completed.`);
+        const answer = await askYesNo("Resume previous scan?");
+        if (answer) {
+          resume = true;
+        }
+      }
+    }
+  }
 
   // Discover or resume
   let state;
@@ -316,16 +334,16 @@ export async function scan(options: ScanOptions): Promise<number> {
   // Generate summary — basic fallback first, then AI-powered
   let summaryPath = writeSummary(absOutput, state);
   if (state.stats.completed > 0) {
-    const sumStart = Date.now();
-    console.log("Generating AI summary...");
+    const modelLabel = model ? ` (${model})` : "";
+    process.stdout.write(`Generating AI summary${modelLabel}...`);
+    const ticker = setInterval(() => process.stdout.write("."), 3000);
     const sumResult = await summarizeWithClaude({
-      outputDir: absOutput,
-      state,
-      config,
-      onLog: (msg) => console.log(`  ${msg}`),
+      outputDir: absOutput, state, config,
     });
+    clearInterval(ticker);
+    console.log("");
     summaryPath = sumResult.summaryPath;
-    printSummarizeResult(sumResult, sumStart);
+    printSummarizeResult(sumResult);
   }
 
   // Final output
@@ -376,14 +394,24 @@ export async function scan(options: ScanOptions): Promise<number> {
   return state.stats.failed > 0 ? 1 : 0;
 }
 
-function printSummarizeResult(result: SummarizeResult, startTime: number): void {
-  const elapsed = formatDuration(Date.now() - startTime);
+function askYesNo(question: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${question} [y/N] `, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === "y");
+    });
+  });
+}
+
+function printSummarizeResult(result: SummarizeResult): void {
+  const elapsed = formatDuration(result.durationMs);
+  const costStr = result.cost !== undefined ? ` | cost: $${result.cost.toFixed(4)}` : "";
   if (result.success) {
-    const costStr = result.cost !== undefined ? ` ($${result.cost.toFixed(4)})` : "";
-    console.log(`  AI summary generated in ${elapsed}${costStr}`);
+    console.log(`  Done in ${elapsed}${costStr}`);
   } else {
-    console.log(`  AI summary failed after ${elapsed}: ${result.error ?? "unknown"}`);
+    console.log(`  Failed after ${elapsed}: ${result.error ?? "unknown"}`);
     console.log("  Using basic fallback summary.");
-    console.log(`  Log: ${path.join(path.dirname(result.summaryPath), "logs", "summary.log")}`);
+    console.log(`  Debug log: ${path.join(path.dirname(result.summaryPath), "logs", "summary.log")}`);
   }
 }

@@ -52,6 +52,7 @@ scanner.ts       → top-level orchestrator tying everything together
 - **No file-level locks** — single-threaded orchestrator + unique output paths per file = safe
 - **`--no-session-persistence`** — don't save session files for each of potentially thousands of scans
 - **Two-phase summary** — basic string-matched fallback first, then AI-powered deduplication/ranking via `prompts/summary.md`
+- **Interactive resume prompt** — if `.claude-scan/state.json` exists with incomplete files and user didn't pass `--resume`, prompts "Resume? [y/N]" (TTY only, skipped in CI/piped)
 
 ### State Machine (per file)
 
