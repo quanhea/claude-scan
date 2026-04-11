@@ -1,4 +1,5 @@
 // src/scanner.ts — top-level orchestrator
+import * as fs from "fs";
 import * as path from "path";
 import { ScanOptions, STATUS, DEFAULTS } from "./types";
 import { runPreflight, removeLockFile } from "./preflight";
@@ -43,6 +44,7 @@ export async function scan(options: ScanOptions): Promise<number> {
     include,
     exclude,
     includeTests,
+    summarize,
     resume,
     retry,
     dryRun,
@@ -52,6 +54,28 @@ export async function scan(options: ScanOptions): Promise<number> {
 
   const absTarget = path.resolve(targetDir);
   const absOutput = path.resolve(outputDir);
+
+  // --summarize: re-generate summary from existing reports, skip scanning
+  if (summarize) {
+    const existingState = loadState(absOutput);
+    if (!existingState) {
+      throw new Error("No previous scan found. Run a scan first.");
+    }
+    const summaryPath = path.join(absOutput, "summary.md");
+    try { fs.unlinkSync(summaryPath); } catch {}
+    console.log("Generating AI summary...");
+    const config = {
+      parallel, timeout, maxRetries, maxTurns, maxFileSizeKB,
+      model, prompt: promptFile ?? DEFAULTS.prompt, verbose,
+    };
+    try {
+      await summarizeWithClaude({ outputDir: absOutput, state: existingState, config });
+    } catch {
+      writeSummary(absOutput, existingState);
+    }
+    console.log(`Summary: ${summaryPath}`);
+    return 0;
+  }
 
   // Preflight
   const preflight = runPreflight(absTarget, absOutput, { force });

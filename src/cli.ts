@@ -25,6 +25,8 @@ function parseArgs(argv: string[]): {
       options.retry = true;
     } else if (arg === "--include-tests") {
       options.includeTests = true;
+    } else if (arg === "--summarize") {
+      options.summarize = true;
     } else if (arg === "--dry-run") {
       options.dryRun = true;
     } else if (arg === "--force") {
@@ -93,6 +95,7 @@ Options:
       --max-turns <n>        Max Claude turns per file   (default: ${DEFAULTS.maxTurns})
       --max-file-size <kb>   Skip files larger than      (default: ${DEFAULTS.maxFileSizeKB})
       --retries <n>          Max retries per file        (default: ${DEFAULTS.maxRetries})
+      --summarize            Re-generate AI summary from existing reports
       --dry-run              List files without scanning
       --prompt <file>        Custom prompt template
   -v, --verbose              Verbose output
@@ -146,6 +149,7 @@ async function main(): Promise<void> {
     include: (options.include as string) ?? null,
     exclude: (options.exclude as string) ?? null,
     includeTests: !!options.includeTests,
+    summarize: !!options.summarize,
     resume: !!options.resume,
     retry: !!options.retry,
     dryRun: !!options.dryRun,

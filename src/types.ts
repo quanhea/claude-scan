@@ -78,6 +78,7 @@ export interface ScanOptions {
   include: string | null;
   exclude: string | null;
   includeTests: boolean;
+  summarize: boolean;
   resume: boolean;
   retry: boolean;
   dryRun: boolean;

@@ -43,6 +43,10 @@ claude-scan ./my-project --resume
 # Retry failed/timed-out files
 claude-scan --resume --retry
 
+# Re-generate summary from existing reports
+claude-scan --summarize
+claude-scan --summarize --model claude-sonnet-4-6
+
 # Scan current directory
 claude-scan
 ```
@@ -90,6 +94,7 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
       --resume               Resume pending files from a previous scan
       --retry                Retry failed/timed-out files (use with --resume)
       --include-tests        Include test files (excluded by default)
+      --summarize            Re-generate AI summary from existing reports
       --include <glob>       Only scan matching files
       --exclude <glob>       Skip matching files
   -o, --output <dir>        Output directory             (default: .claude-scan)
