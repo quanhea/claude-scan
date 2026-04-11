@@ -13,6 +13,7 @@ import {
   resetStaleRunning,
   resetFailed,
   mergeNewFiles,
+  pruneExcludedFiles,
   updateFileStatus,
   getPendingFiles,
   markForRetry,
@@ -139,6 +140,10 @@ export async function scan(options: ScanOptions): Promise<number> {
     const newCount = mergeNewFiles(state, freshFiles);
     if (newCount > 0) {
       console.log(`Found ${newCount} new files to scan.`);
+    }
+    const prunedCount = pruneExcludedFiles(state, freshFiles);
+    if (prunedCount > 0) {
+      console.log(`Removed ${prunedCount} files no longer matching filters.`);
     }
     // Apply new config overrides
     state.config = config;

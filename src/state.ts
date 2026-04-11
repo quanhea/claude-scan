@@ -140,6 +140,20 @@ export function mergeNewFiles(state: ScanState, files: string[]): number {
   return count;
 }
 
+export function pruneExcludedFiles(state: ScanState, freshFiles: string[]): number {
+  const freshSet = new Set(freshFiles);
+  let count = 0;
+  for (const [file, entry] of Object.entries(state.files)) {
+    // Only remove files that haven't been scanned yet
+    if (entry.status === STATUS.PENDING && !freshSet.has(file)) {
+      delete state.files[file];
+      count++;
+    }
+  }
+  if (count > 0) state.stats = computeStats(state.files);
+  return count;
+}
+
 export function updateFileStatus(
   state: ScanState,
   filePath: string,
