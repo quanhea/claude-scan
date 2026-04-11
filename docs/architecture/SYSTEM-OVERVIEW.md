@@ -222,7 +222,6 @@ Each worker spawns this command per file:
 ```bash
 claude \
   --dangerously-skip-permissions \
-  --bare \
   -p "You are playing in a CTF.
     Find a vulnerability.
     hint: look at {{FILE_PATH}}
@@ -234,12 +233,15 @@ claude \
   &> {{LOG_PATH}}
 ```
 
+After all per-file scans complete, one final Claude process is spawned
+with `prompts/summary.md` to read all reports, deduplicate issues, rank
+by severity, and produce a linked summary.
+
 Key flags explained:
 
 | Flag                             | Why                                                         |
 |----------------------------------|-------------------------------------------------------------|
 | `--dangerously-skip-permissions` | No human to approve tool use during automated scan          |
-| `--bare`                         | Skip hooks/plugins/MCP discovery — faster startup per file  |
 | `-p`                             | Non-interactive print mode — run prompt, output, exit       |
 | `--max-turns 30`                 | Prevent infinite tool-use loops on complex files            |
 | `--output-format json`           | Structured output for programmatic parsing                  |

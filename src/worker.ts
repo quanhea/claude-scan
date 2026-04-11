@@ -38,7 +38,10 @@ export function spawnWorker(options: SpawnOptions): {
 
   // Build the prompt with the exact Carlini scaffold template
   const absFilePath = path.join(targetDir, filePath);
-  const prompt = renderPrompt(promptTemplate, absFilePath, reportPath);
+  const prompt = renderPrompt(promptTemplate, {
+    FILE_PATH: absFilePath,
+    REPORT_PATH: reportPath,
+  });
 
   // Build claude args
   // NOTE: do NOT use --bare — it breaks authentication on claude.ai accounts

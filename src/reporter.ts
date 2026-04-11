@@ -1,7 +1,9 @@
 // src/reporter.ts — aggregate per-file reports into summary.md
+import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { ScanState, STATUS } from "./types";
+import { ScanState, ScanConfig, STATUS } from "./types";
+import { loadPrompt, renderPrompt } from "./prompt";
 
 export interface Finding {
   file: string;
@@ -127,4 +129,85 @@ export function writeSummary(outputDir: string, state: ScanState): string {
   const content = generateSummary(outputDir, state);
   fs.writeFileSync(summaryPath, content);
   return summaryPath;
+}
+
+export async function summarizeWithClaude(options: {
+  outputDir: string;
+  state: ScanState;
+  config: ScanConfig;
+}): Promise<string> {
+  const { outputDir, state, config } = options;
+  const reportsDir = path.join(outputDir, "reports");
+  const summaryPath = path.join(outputDir, "summary.md");
+
+  // Only run if there are completed reports
+  const hasReports = Object.values(state.files).some(
+    (e) => e.status === STATUS.COMPLETED && e.reportPath && fs.existsSync(e.reportPath),
+  );
+  if (!hasReports) return summaryPath;
+
+  // Load and render the summary prompt
+  const template = loadPrompt("summary.md");
+  const prompt = renderPrompt(template, {
+    REPORTS_DIR: reportsDir,
+    SUMMARY_PATH: summaryPath,
+  });
+
+  const args: string[] = [
+    "--dangerously-skip-permissions",
+    "-p",
+    prompt,
+    "--max-turns",
+    String(config.maxTurns),
+    "--output-format",
+    "json",
+    "--no-session-persistence",
+  ];
+
+  if (config.model) {
+    args.push("--model", config.model);
+  }
+
+  const logPath = path.join(outputDir, "logs", "summary.log");
+  const logStream = fs.createWriteStream(logPath, { flags: "w" });
+
+  return new Promise<string>((resolve) => {
+    const child = spawn("claude", args, {
+      cwd: outputDir,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    if (child.stdout) child.stdout.pipe(logStream);
+    if (child.stderr) child.stderr.pipe(logStream);
+
+    const timeout = setTimeout(() => {
+      try { child.kill("SIGTERM"); } catch {}
+    }, config.timeout * 1000);
+
+    child.on("exit", (code) => {
+      clearTimeout(timeout);
+      logStream.end();
+
+      if (code === 0 && fs.existsSync(summaryPath)) {
+        // Check if Claude actually wrote something meaningful
+        const content = fs.readFileSync(summaryPath, "utf-8").trim();
+        if (content.length > 50) {
+          resolve(summaryPath);
+          return;
+        }
+      }
+
+      // Fallback: write the basic summary
+      writeSummary(outputDir, state);
+      resolve(summaryPath);
+    });
+
+    child.on("error", () => {
+      clearTimeout(timeout);
+      logStream.end();
+      writeSummary(outputDir, state);
+      resolve(summaryPath);
+    });
+  });
 }

@@ -16,7 +16,7 @@ import {
 } from "./state";
 import { WorkerPool } from "./worker-pool";
 import { fileToSlug } from "./worker";
-import { writeSummary } from "./reporter";
+import { writeSummary, summarizeWithClaude } from "./reporter";
 import {
   isTTY,
   printLogLine,
@@ -270,8 +270,20 @@ export async function scan(options: ScanOptions): Promise<number> {
   state.stats = computeStats(state.files);
   saveState(state, absOutput);
 
-  // Generate summary
-  const summaryPath = writeSummary(absOutput, state);
+  // Generate summary — basic fallback first, then AI-powered
+  let summaryPath = writeSummary(absOutput, state);
+  if (state.stats.completed > 0) {
+    console.log("Generating AI summary...");
+    try {
+      summaryPath = await summarizeWithClaude({
+        outputDir: absOutput,
+        state,
+        config,
+      });
+    } catch {
+      // Keep the basic summary on failure
+    }
+  }
 
   // Final output
   const elapsed = formatDuration(Date.now() - startTime);

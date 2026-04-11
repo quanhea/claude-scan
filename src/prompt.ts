@@ -20,10 +20,11 @@ export function loadPrompt(promptFile: string | null): string {
 
 export function renderPrompt(
   template: string,
-  filePath: string,
-  reportPath: string,
+  vars: Record<string, string>,
 ): string {
-  return template
-    .replace(/\{\{FILE_PATH\}\}/g, filePath)
-    .replace(/\{\{REPORT_PATH\}\}/g, reportPath);
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value);
+  }
+  return result;
 }

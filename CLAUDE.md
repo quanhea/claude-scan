@@ -35,10 +35,10 @@ discovery.ts     → finds files to scan (git ls-files or glob, filters by exten
 state.ts         → state persistence (state.json), atomic writes, resume logic
 worker-pool.ts   → manages N concurrent claude child processes
 worker.ts        → spawns a single claude -p process, handles timeout/hang/exit
-reporter.ts      → aggregates per-file reports into summary.md
+reporter.ts      → basic summary fallback + AI-powered summary via prompts/summary.md
 progress.ts      → terminal progress display (TTY vs piped)
 types.ts         → shared types, constants, status enum, defaults
-prompt.ts        → loads and templates the prompt file ({{FILE_PATH}}, {{REPORT_PATH}})
+prompt.ts        → loads prompt templates, replaces {{PLACEHOLDER}} vars from a map
 scanner.ts       → top-level orchestrator tying everything together
 ```
 
@@ -49,8 +49,8 @@ scanner.ts       → top-level orchestrator tying everything together
 - **Programmatic file filtering** — `git ls-files` + extension/size/binary checks. No LLM pre-filter call
 - **Atomic state writes** — write to `.tmp`, fsync, rename. Never corrupt state.json
 - **No file-level locks** — single-threaded orchestrator + unique output paths per file = safe
-- **`--bare` flag** on claude invocations — skips hooks/plugins/MCP discovery for fast startup per file
 - **`--no-session-persistence`** — don't save session files for each of potentially thousands of scans
+- **Two-phase summary** — basic string-matched fallback first, then AI-powered deduplication/ranking via `prompts/summary.md`
 
 ### State Machine (per file)
 

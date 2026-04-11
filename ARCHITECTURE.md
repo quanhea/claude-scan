@@ -76,25 +76,30 @@ consecutive successes it restores it. Emits `start`, `done`, and `drain`
 events consumed by `scanner.ts`.
 
 **`worker.ts`** — Spawns a single `claude -p` child process for one file.
-Constructs the CLI args (`--dangerously-skip-permissions`, `--bare`,
+Constructs the CLI args (`--dangerously-skip-permissions`,
 `--max-turns`, `--output-format json`, `--no-session-persistence`), pipes
 stdout/stderr directly to a log file (never buffered in memory), runs a
-timeout timer and a hang detector (no output for 2 minutes), and classifies
-the exit into COMPLETED / FAILED / TIMEOUT. Returns a `{ child, promise, kill }`
-triple so the pool can await or force-terminate it.
+timeout timer, and classifies the exit into COMPLETED / FAILED / TIMEOUT.
+Returns a `{ child, promise, kill }` triple so the pool can await or
+force-terminate it.
 
 ### Support Modules
 
-**`prompt.ts`** — Loads a prompt template file and replaces `{{FILE_PATH}}`
-and `{{REPORT_PATH}}` placeholders. The default template is `prompts/scan.md`.
+**`prompt.ts`** — Loads a prompt template file and replaces placeholders
+(e.g. `{{FILE_PATH}}`, `{{REPORT_PATH}}`, `{{REPORTS_DIR}}`) from a
+key-value map. Two bundled templates: `prompts/scan.md` (per-file scan)
+and `prompts/summary.md` (AI-powered summary).
 
 **`progress.ts`** — Terminal output. In TTY mode: in-place progress bar with
 per-worker status, updated every 500ms. In non-TTY mode (CI, piped): simple
 timestamped log lines.
 
-**`reporter.ts`** — After the pool drains, scans all report files in the
-output directory, detects severity from content, and writes a `summary.md`
-grouped by severity.
+**`reporter.ts`** — Two-phase summary generation. First writes a basic
+`summary.md` with simple string-matched severity (free, instant fallback).
+Then spawns one final `claude -p` process with `prompts/summary.md` that
+reads all report files, deduplicates issues across files, ranks by severity,
+and writes a proper summary with links to per-file reports. Falls back to the
+basic summary if the AI step fails.
 
 **`types.ts`** — Shared type definitions, the `STATUS` enum, `CODE_EXTENSIONS`
 set, `DEFAULT_IGNORE_PATTERNS` list, and `DEFAULTS` config object. This is the
