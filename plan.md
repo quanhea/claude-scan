@@ -2,16 +2,16 @@
 
 ## 1. Foundation & Types
 - [x] types.ts — status enum, interfaces (ScanState, FileEntry, ScanConfig, etc.), constants (CODE_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, DEFAULTS)
-- [ ] prompt.ts — load prompt template from file, replace {{FILE_PATH}} and {{REPORT_PATH}} placeholders
-- [ ] Test: prompt template loading and substitution
+- [x] prompt.ts — load prompt template from file, replace {{FILE_PATH}} and {{REPORT_PATH}} placeholders
+- [x] Test: prompt template loading and substitution
 
 ## 2. Preflight Checks
-- [ ] preflight.ts — checkClaudeInstalled (which claude), checkClaudeAuth (claude auth status), checkTargetDir, lock file create/check/remove
-- [ ] Test: lock file creation, stale lock detection, target dir validation
+- [x] preflight.ts — checkClaudeInstalled (which claude), checkClaudeAuth (claude auth status), checkTargetDir, lock file create/check/remove
+- [x] Test: lock file creation, stale lock detection, target dir validation
 
 ## 3. File Discovery
-- [ ] discovery.ts — isGitRepo, gitFiles (git ls-files), globFiles (recursive walk), extension filter, size filter, binary detection, user include/exclude
-- [ ] Test: extension filtering, ignore patterns, size filtering, binary detection, matchGlob
+- [x] discovery.ts — isGitRepo, gitFiles (git ls-files), globFiles (recursive walk), extension filter, size filter, binary detection, user include/exclude
+- [x] Test: extension filtering, ignore patterns, size filtering, binary detection, matchGlob
 
 ## 4. State Management
 - [ ] state.ts — initState, loadState, saveState (atomic: write tmp → fsync → rename), resetStaleRunning, recomputeStats, version check
