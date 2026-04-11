@@ -41,6 +41,7 @@ export async function scan(options: ScanOptions): Promise<number> {
     promptFile,
     include,
     exclude,
+    includeTests,
     resume,
     retry,
     dryRun,
@@ -95,7 +96,7 @@ export async function scan(options: ScanOptions): Promise<number> {
     if (preflight.singleFile) {
       files = [path.relative(absTarget, preflight.singleFile) || path.basename(preflight.singleFile)];
     } else {
-      files = discoverFiles(absTarget, { include, exclude, maxFileSizeKB });
+      files = discoverFiles(absTarget, { include, exclude, maxFileSizeKB, includeTests });
     }
 
     if (files.length === 0) {

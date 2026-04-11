@@ -77,6 +77,7 @@ export interface ScanOptions {
   promptFile: string | null;
   include: string | null;
   exclude: string | null;
+  includeTests: boolean;
   resume: boolean;
   retry: boolean;
   dryRun: boolean;
@@ -114,6 +115,34 @@ export const DEFAULT_IGNORE_PATTERNS = [
   "go.sum", "Cargo.lock", "Gemfile.lock",
   "poetry.lock", "composer.lock", "Pipfile.lock",
 ];
+
+// Test file patterns — excluded by default, opt in with --include-tests
+export const DEFAULT_TEST_PATTERNS = [
+  // Directories
+  "test/", "tests/", "__tests__/", "__test__/",
+  "spec/", "specs/", "_tests/", "_test/",
+  "testing/", "e2e/", "cypress/", "playwright/",
+  "fixtures/", "__fixtures__/", "__mocks__/",
+  "testdata/", "test-data/", "test_data/",
+  // JS/TS suffixes
+  "*.test.ts", "*.test.js", "*.test.tsx", "*.test.jsx", "*.test.mjs", "*.test.cjs",
+  "*.spec.ts", "*.spec.js", "*.spec.tsx", "*.spec.jsx", "*.spec.mjs", "*.spec.cjs",
+  // Other language suffixes
+  "*_test.go", "*_test.py", "*_test.rb", "*_test.rs",
+  "*_test.c", "*_test.cpp", "*_test.exs",
+  "*_spec.rb", "*.spec.lua",
+  // Python prefix
+  "test_*.py",
+  // Exact filenames
+  "conftest.py",
+];
+
+// JVM test patterns need basename matching (not extension-based)
+export const JVM_TEST_PATTERNS = {
+  suffixes: ["Test.java", "Tests.java", "Test.kt", "Tests.kt", "Test.scala"],
+  prefixes: ["Test"],
+  extensions: [".java", ".kt", ".scala"],
+};
 
 export const DEFAULTS: ScanConfig & { maxFileSizeKB: number } = {
   parallel: 4,

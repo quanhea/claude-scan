@@ -53,7 +53,7 @@ claude-scan
 discover files → queue them → spawn N claude -p processes → collect reports
 ```
 
-1. **Discover** — `git ls-files` (respects `.gitignore`) or recursive directory walk, filtered by extension, file size, and binary content detection. No LLM calls are spent on filtering.
+1. **Discover** — `git ls-files` (respects `.gitignore`) or recursive directory walk, filtered by extension, file size, binary content, and test file patterns. Test files are excluded by default (`--include-tests` to opt in). No LLM calls are spent on filtering.
 2. **Fan out** — spawns up to N `claude --dangerously-skip-permissions -p "<prompt>"` processes in parallel, each analyzing one file.
 3. **Monitor** — tracks progress, handles timeouts (default 5 min per file), saves state atomically for crash recovery.
 4. **Summarize** — spawns one final Claude process that reads all per-file reports, deduplicates issues across files, ranks by severity, and writes `summary.md` with links to each report.
@@ -89,6 +89,7 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
   -t, --timeout <seconds>   Per-file timeout            (default: 300)
       --resume               Resume pending files from a previous scan
       --retry                Retry failed/timed-out files (use with --resume)
+      --include-tests        Include test files (excluded by default)
       --include <glob>       Only scan matching files
       --exclude <glob>       Skip matching files
   -o, --output <dir>        Output directory             (default: .claude-scan)

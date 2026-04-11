@@ -31,9 +31,27 @@ describe("CLI", () => {
     assert.ok(out.includes("Would scan") || out.includes("No files"));
   });
 
-  it("--help shows --retry flag", () => {
+  it("--help shows --retry and --include-tests flags", () => {
     const out = execFileSync("node", [CLI, "--help"], { encoding: "utf-8" });
     assert.ok(out.includes("--retry"));
+    assert.ok(out.includes("--include-tests"));
+  });
+
+  it("--dry-run --include-tests includes test files", () => {
+    const without = execFileSync(
+      "node",
+      [CLI, FIXTURES, "--dry-run"],
+      { encoding: "utf-8" },
+    );
+    const withTests = execFileSync(
+      "node",
+      [CLI, FIXTURES, "--dry-run", "--include-tests"],
+      { encoding: "utf-8" },
+    );
+    // --include-tests should show more files
+    const countWithout = (without.match(/\n/g) || []).length;
+    const countWith = (withTests.match(/\n/g) || []).length;
+    assert.ok(countWith > countWithout, "Expected more files with --include-tests");
   });
 
   it("--dry-run lists files without scanning", () => {

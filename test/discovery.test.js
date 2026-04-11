@@ -1,7 +1,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
-const { discoverFiles, matchesIgnore, isBinary, matchGlob } = require("../dist/discovery");
+const { discoverFiles, matchesIgnore, matchesTestPattern, isBinary, matchGlob } = require("../dist/discovery");
 
 const FIXTURES = path.join(__dirname, "fixtures", "sample-project");
 
@@ -45,6 +45,59 @@ describe("isBinary", () => {
 
   it("returns true for non-existent files", () => {
     assert.ok(isBinary("/tmp/does-not-exist-" + Date.now()));
+  });
+});
+
+describe("matchesTestPattern", () => {
+  it("matches test directories", () => {
+    assert.ok(matchesTestPattern("tests/test_auth.py"));
+    assert.ok(matchesTestPattern("__tests__/app.test.js"));
+    assert.ok(matchesTestPattern("spec/models/user_spec.rb"));
+    assert.ok(matchesTestPattern("e2e/login.test.ts"));
+    assert.ok(matchesTestPattern("cypress/integration/login.js"));
+  });
+
+  it("matches JS/TS test file patterns", () => {
+    assert.ok(matchesTestPattern("src/app.test.ts"));
+    assert.ok(matchesTestPattern("src/app.spec.js"));
+    assert.ok(matchesTestPattern("src/app.test.tsx"));
+    assert.ok(matchesTestPattern("src/app.spec.jsx"));
+  });
+
+  it("matches Go test files", () => {
+    assert.ok(matchesTestPattern("src/handler_test.go"));
+  });
+
+  it("matches Python test files", () => {
+    assert.ok(matchesTestPattern("test_auth.py"));
+    assert.ok(matchesTestPattern("src/test_utils.py"));
+    assert.ok(matchesTestPattern("src/auth_test.py"));
+    assert.ok(matchesTestPattern("conftest.py"));
+  });
+
+  it("matches JVM test files", () => {
+    assert.ok(matchesTestPattern("src/FooTest.java"));
+    assert.ok(matchesTestPattern("src/FooTests.java"));
+    assert.ok(matchesTestPattern("src/BarTest.kt"));
+    assert.ok(matchesTestPattern("TestFoo.java"));
+  });
+
+  it("matches Ruby spec files", () => {
+    assert.ok(matchesTestPattern("spec/models/user_spec.rb"));
+    assert.ok(matchesTestPattern("src/user_spec.rb"));
+  });
+
+  it("matches Rust/C/Elixir test files", () => {
+    assert.ok(matchesTestPattern("src/parser_test.rs"));
+    assert.ok(matchesTestPattern("src/utils_test.c"));
+    assert.ok(matchesTestPattern("src/auth_test.exs"));
+  });
+
+  it("does NOT match normal files with 'test' in name", () => {
+    assert.ok(!matchesTestPattern("src/testutils.py"));
+    assert.ok(!matchesTestPattern("src/testing_utils.ts"));
+    assert.ok(!matchesTestPattern("src/attestation.go"));
+    assert.ok(!matchesTestPattern("src/contest.java"));
   });
 });
 
@@ -121,6 +174,30 @@ describe("discoverFiles", () => {
     const files = discoverFiles(FIXTURES);
     const sorted = [...files].sort();
     assert.deepEqual(files, sorted);
+  });
+
+  it("excludes test files by default", () => {
+    const files = discoverFiles(FIXTURES);
+    // Test directories
+    assert.ok(!files.some((f) => f.startsWith("tests/")));
+    assert.ok(!files.some((f) => f.startsWith("__tests__/")));
+    // Test file patterns
+    assert.ok(!files.includes("src/handler_test.go"));
+    assert.ok(!files.includes("src/app.spec.ts"));
+    assert.ok(!files.includes("src/FooTest.java"));
+    assert.ok(!files.includes("conftest.py"));
+    // Non-test files with "test" in name should still be included
+    assert.ok(files.includes("src/testutils.py"));
+  });
+
+  it("includes test files with includeTests: true", () => {
+    const files = discoverFiles(FIXTURES, { includeTests: true });
+    assert.ok(files.some((f) => f.startsWith("tests/")));
+    assert.ok(files.some((f) => f.startsWith("__tests__/")));
+    assert.ok(files.includes("src/handler_test.go"));
+    assert.ok(files.includes("src/app.spec.ts"));
+    assert.ok(files.includes("src/FooTest.java"));
+    assert.ok(files.includes("conftest.py"));
   });
 
   it("returns empty for nonexistent directory", () => {

@@ -23,6 +23,8 @@ function parseArgs(argv: string[]): {
       options.resume = true;
     } else if (arg === "--retry") {
       options.retry = true;
+    } else if (arg === "--include-tests") {
+      options.includeTests = true;
     } else if (arg === "--dry-run") {
       options.dryRun = true;
     } else if (arg === "--force") {
@@ -83,6 +85,7 @@ Options:
   -t, --timeout <seconds>   Per-file timeout           (default: ${DEFAULTS.timeout})
       --resume               Resume pending files from a previous scan
       --retry                Retry failed/timed-out files (use with --resume)
+      --include-tests        Include test files (excluded by default)
       --include <glob>       Only scan matching files
       --exclude <glob>       Skip matching files
   -o, --output <dir>        Output directory            (default: .claude-scan)
@@ -142,6 +145,7 @@ async function main(): Promise<void> {
     promptFile: (options.prompt as string) ?? null,
     include: (options.include as string) ?? null,
     exclude: (options.exclude as string) ?? null,
+    includeTests: !!options.includeTests,
     resume: !!options.resume,
     retry: !!options.retry,
     dryRun: !!options.dryRun,

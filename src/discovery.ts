@@ -2,7 +2,7 @@
 import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { CODE_EXTENSIONS, DEFAULT_IGNORE_PATTERNS } from "./types";
+import { CODE_EXTENSIONS, DEFAULT_IGNORE_PATTERNS, DEFAULT_TEST_PATTERNS, JVM_TEST_PATTERNS } from "./types";
 
 export function isGitRepo(dir: string): boolean {
   try {
@@ -83,6 +83,49 @@ export function isBinary(filePath: string): boolean {
   }
 }
 
+export function matchesTestPattern(relPath: string): boolean {
+  const basename = path.basename(relPath);
+  const segments = relPath.split(path.sep);
+
+  for (const pattern of DEFAULT_TEST_PATTERNS) {
+    if (pattern.endsWith("/")) {
+      // Directory pattern
+      const dir = pattern.slice(0, -1);
+      if (segments.some((s) => s === dir)) return true;
+    } else if (pattern.startsWith("*.") && pattern.indexOf(".", 2) !== -1) {
+      // Multi-extension suffix: *.test.ts, *.spec.js
+      const suffix = pattern.slice(1); // .test.ts
+      if (basename.endsWith(suffix)) return true;
+    } else if (pattern.startsWith("*") && !pattern.startsWith("*.")) {
+      // Suffix on basename: *_test.go, *_spec.rb
+      const suffix = pattern.slice(1);
+      if (basename.endsWith(suffix)) return true;
+    } else if (pattern.includes("*")) {
+      // Prefix pattern: test_*.py
+      const [prefix, ext] = pattern.split("*");
+      if (basename.startsWith(prefix) && basename.endsWith(ext)) return true;
+    } else {
+      // Exact filename
+      if (basename === pattern) return true;
+    }
+  }
+
+  // JVM patterns: FooTest.java, FooTests.kt, TestFoo.java
+  const ext = path.extname(basename);
+  if (JVM_TEST_PATTERNS.extensions.includes(ext)) {
+    const name = basename.slice(0, -ext.length);
+    for (const suffix of JVM_TEST_PATTERNS.suffixes) {
+      const suf = suffix.slice(0, -ext.length); // "Test", "Tests"
+      if (name.endsWith(suf)) return true;
+    }
+    for (const prefix of JVM_TEST_PATTERNS.prefixes) {
+      if (name.startsWith(prefix) && name[prefix.length]?.match(/[A-Z]/)) return true;
+    }
+  }
+
+  return false;
+}
+
 export function matchGlob(filePath: string, pattern: string): boolean {
   if (pattern.startsWith("*.")) {
     return filePath.endsWith(pattern.slice(1));
@@ -101,13 +144,14 @@ export interface DiscoveryOptions {
   include?: string | string[] | null;
   exclude?: string | string[] | null;
   maxFileSizeKB?: number;
+  includeTests?: boolean;
 }
 
 export function discoverFiles(
   targetDir: string,
   options: DiscoveryOptions = {},
 ): string[] {
-  const { include = null, exclude = null, maxFileSizeKB = 100 } = options;
+  const { include = null, exclude = null, maxFileSizeKB = 100, includeTests = false } = options;
   const absDir = path.resolve(targetDir);
   const useGit = isGitRepo(absDir);
   let files = useGit ? gitFiles(absDir) : [];
@@ -128,6 +172,11 @@ export function discoverFiles(
     if (path.basename(f).toLowerCase() === "dockerfile") return true;
     return CODE_EXTENSIONS.has(ext);
   });
+
+  // Test file filter (default: exclude tests)
+  if (!includeTests) {
+    files = files.filter((f) => !matchesTestPattern(f));
+  }
 
   // User --include
   if (include) {

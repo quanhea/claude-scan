@@ -46,7 +46,8 @@ scanner.ts       → top-level orchestrator tying everything together
 
 - **TypeScript compiled to JS** — no runtime TS dependency, distributed as compiled JS via npm
 - **Plain `child_process.spawn`** — no tmux, no external process manager. Claude runs in non-interactive `-p` mode
-- **Programmatic file filtering** — `git ls-files` + extension/size/binary checks. No LLM pre-filter call
+- **Programmatic file filtering** — `git ls-files` + extension/size/binary/test-pattern checks. No LLM pre-filter call
+- **Test files excluded by default** — comprehensive patterns for all languages (`DEFAULT_TEST_PATTERNS` + JVM-specific). Opt in with `--include-tests`
 - **Atomic state writes** — write to `.tmp`, fsync, rename. Never corrupt state.json
 - **No file-level locks** — single-threaded orchestrator + unique output paths per file = safe
 - **`--no-session-persistence`** — don't save session files for each of potentially thousands of scans

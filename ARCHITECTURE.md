@@ -54,9 +54,11 @@ scan completion.
 
 **`discovery.ts`** — Finds files to scan. Uses `git ls-files` when inside a
 git repo (respects `.gitignore`), falls back to a recursive directory walk.
-Filters by file extension, size, and binary content. The filtering is fully
-programmatic — no LLM calls are spent here. The canonical list of code
-extensions and ignore patterns lives in `types.ts`.
+Filters by file extension, size, binary content, and test file patterns.
+Test files (directories like `tests/`, `__tests__/`, `spec/` and file patterns
+like `*.test.ts`, `*_test.go`, `*Test.java`) are excluded by default —
+`--include-tests` opts in. The filtering is fully programmatic — no LLM
+calls are spent here. The canonical lists live in `types.ts`.
 
 **`state.ts`** — Persistence layer. The scan state (which files are pending,
 running, completed, failed) is kept in memory as a `ScanState` object and
