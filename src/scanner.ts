@@ -255,16 +255,21 @@ export async function scan(options: ScanOptions): Promise<number> {
   // Fatal error detection — halt on auth failures
   let consecutiveAuthErrors = 0;
 
-  // Rate limit auto-pause — silently retry every 15 min
+  // Rate limit auto-pause — wait until reset time, or retry every 15 min
   let rateLimitPaused = false;
   let rateLimitTimer: NodeJS.Timeout | null = null;
-  const RATE_LIMIT_RETRY_MS = 15 * 60 * 1000;
+  const DEFAULT_RATE_LIMIT_RETRY_MS = 15 * 60 * 1000;
+  // +60s penalty ensures we don't probe exactly at the reset boundary
+  const PENALTY_MS = 60 * 1000;
 
-  function scheduleRateLimitRetry(): void {
+  function scheduleRateLimitRetry(retryAfterMs?: number): void {
+    const delay = retryAfterMs
+      ? retryAfterMs + PENALTY_MS
+      : DEFAULT_RATE_LIMIT_RETRY_MS;
     rateLimitTimer = setTimeout(() => {
       rateLimitPaused = false;
       pool.resume();
-    }, RATE_LIMIT_RETRY_MS);
+    }, delay);
   }
   const FATAL_AUTH_THRESHOLD = 3;
 
@@ -277,7 +282,7 @@ export async function scan(options: ScanOptions): Promise<number> {
     });
   });
 
-  pool.on("done", (file: string, result: { status: string; durationMs: number; exitCode: number | null; error?: string }, _workerIndex: number) => {
+  pool.on("done", (file: string, result: { status: string; durationMs: number; exitCode: number | null; error?: string; retryAfterMs?: number }, _workerIndex: number) => {
     activeStartTimes.delete(file);
 
     const reportPath = path.join(absOutput, "reports", fileToSlug(file) + ".md");
@@ -330,16 +335,24 @@ export async function scan(options: ScanOptions): Promise<number> {
           pool.killAll();
         }
       } else if (result.error === "rate_limit" || result.error === "overloaded") {
-        // Requeue the file and pause — will auto-resume in 15 min
+        // Requeue the file and pause — auto-resume when limit resets
         pool.requeueFile(file);
         updateFileStatus(state, file, STATUS.PENDING);
         if (!rateLimitPaused) {
           rateLimitPaused = true;
           pool.pause();
-          printEventAboveProgress(
-            "Rate limited. Will auto-resume when ready.",
-          );
-          scheduleRateLimitRetry();
+          const retryAfterMs = result.retryAfterMs;
+          if (retryAfterMs) {
+            const resumeAt = new Date(Date.now() + retryAfterMs + 60000);
+            printEventAboveProgress(
+              `Rate limited. Auto-resume at ${resumeAt.toLocaleTimeString()}.`,
+            );
+          } else {
+            printEventAboveProgress(
+              "Rate limited. Will auto-resume when ready.",
+            );
+          }
+          scheduleRateLimitRetry(retryAfterMs);
         }
       } else {
         consecutiveAuthErrors = 0;

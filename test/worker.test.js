@@ -3,7 +3,33 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { spawnWorker, fileToSlug } = require("../dist/worker");
+const { spawnWorker, fileToSlug, parseResetTime } = require("../dist/worker");
+
+describe("parseResetTime", () => {
+  it("parses 'resets 2am (Asia/Saigon)'", () => {
+    const ms = parseResetTime("You've hit your limit · resets 2am (Asia/Saigon)");
+    assert.ok(ms !== undefined, "should parse");
+    assert.ok(ms > 0, "should be positive");
+    assert.ok(ms < 25 * 60 * 60 * 1000, "should be within 25 hours");
+  });
+
+  it("parses 'resets 11pm (America/Los_Angeles)'", () => {
+    const ms = parseResetTime("Rate limited · resets 11pm (America/Los_Angeles)");
+    assert.ok(ms !== undefined);
+    assert.ok(ms > 0);
+  });
+
+  it("parses without am/pm", () => {
+    const ms = parseResetTime("resets 14 (UTC)");
+    assert.ok(ms !== undefined);
+  });
+
+  it("returns undefined for unparseable messages", () => {
+    assert.equal(parseResetTime("just some error"), undefined);
+    assert.equal(parseResetTime("rate limited"), undefined);
+    assert.equal(parseResetTime(""), undefined);
+  });
+});
 
 describe("fileToSlug", () => {
   it("replaces slashes with double underscores", () => {

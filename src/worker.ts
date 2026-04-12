@@ -23,6 +23,38 @@ export interface ClaudeSpawnResult {
   error?: string;
   result?: string;
   cost?: number;
+  retryAfterMs?: number;
+}
+
+// Parse "resets 2am (Asia/Saigon)" → ms until that time
+export function parseResetTime(msg: string): number | undefined {
+  const match = msg.match(/resets\s+(\d{1,2})(am|pm)?\s*\(([^)]+)\)/i);
+  if (!match) return undefined;
+  const hour12 = parseInt(match[1], 10);
+  const ampm = match[2]?.toLowerCase();
+  const tz = match[3];
+
+  let hour24 = hour12;
+  if (ampm === "pm" && hour12 < 12) hour24 = hour12 + 12;
+  if (ampm === "am" && hour12 === 12) hour24 = 0;
+
+  // Get current time in the target timezone
+  const now = new Date();
+  const tzNow = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  const localNow = new Date(now.toLocaleString("en-US"));
+  const tzOffset = localNow.getTime() - tzNow.getTime();
+
+  // Target time in the target timezone
+  const target = new Date(tzNow);
+  target.setHours(hour24, 0, 0, 0);
+  // If target is in the past, it means tomorrow
+  if (target.getTime() <= tzNow.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  const targetLocal = target.getTime() + tzOffset;
+  const waitMs = targetLocal - now.getTime();
+  return waitMs > 0 ? waitMs : undefined;
 }
 
 export function spawnClaude(options: ClaudeSpawnOptions): {
@@ -125,12 +157,20 @@ export function spawnClaude(options: ClaudeSpawnOptions): {
 
       // Classify error
       let error: string | undefined;
+      let retryAfterMs: number | undefined;
       if (killed || exitCode !== 0 || isError) {
         const msg = claudeResult || "";
         if (msg.includes("Not logged in") || msg.includes("/login")) {
           error = "auth_error";
-        } else if (msg.includes("rate_limit") || msg.includes("429")) {
+        } else if (
+          msg.includes("rate_limit") ||
+          msg.includes("429") ||
+          msg.includes("hit your limit") ||
+          msg.includes("hit the rate limit") ||
+          msg.includes("usage limit")
+        ) {
           error = "rate_limit";
+          retryAfterMs = parseResetTime(msg);
         } else if (msg.includes("overloaded") || msg.includes("529")) {
           error = "overloaded";
         } else {
@@ -138,7 +178,7 @@ export function spawnClaude(options: ClaudeSpawnOptions): {
         }
       }
 
-      resolve({ exitCode, durationMs, killed, isError, error, result: claudeResult, cost });
+      resolve({ exitCode, durationMs, killed, isError, error, result: claudeResult, cost, retryAfterMs });
     });
 
     child.on("error", (err) => {
@@ -206,6 +246,7 @@ export function spawnWorker(options: SpawnOptions): {
       exitCode: r.exitCode,
       durationMs: r.durationMs,
       error: r.error,
+      retryAfterMs: r.retryAfterMs,
     };
   });
 

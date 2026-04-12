@@ -63,6 +63,7 @@ export interface WorkerResult {
   exitCode: number | null;
   durationMs: number;
   error?: string;
+  retryAfterMs?: number;
 }
 
 export interface ScanOptions {
