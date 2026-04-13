@@ -52,7 +52,7 @@ claude-scan <target-dir> [options]
 
 Options:
   -j, --parallel <n>        Parallel workers           (default: 12)
-  -t, --timeout <seconds>   Per-file timeout           (default: 300)
+  -t, --timeout <seconds>   Per-file timeout           (default: 1800)
       --resume               Resume a previous scan
       --include <glob>       Only scan matching files
       --exclude <glob>       Skip matching files

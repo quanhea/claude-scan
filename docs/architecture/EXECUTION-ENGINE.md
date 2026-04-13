@@ -221,7 +221,7 @@ Users can override with `--parallel N`. We cap at 32 with a warning:
 
 ### Per-file timeout
 
-Default: `300 seconds` (5 minutes). Most files analyze in 30-120 seconds.
+Default: `1800 seconds` (30 minutes). Most files analyze in 30-180 seconds.
 Complex files (large, deep call chains) may need longer.
 
 ```

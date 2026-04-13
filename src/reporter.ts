@@ -135,8 +135,8 @@ export async function summarizeWithClaude(options: {
     SUMMARY_PATH: summaryPath,
   });
 
-  // Summary reads many files — use 30 min timeout instead of per-file timeout
-  const summaryConfig = { ...config, timeout: 1800 };
+  // Summary reads many files — use 60 min timeout instead of per-file timeout
+  const summaryConfig = { ...config, timeout: 3600 };
   const { promise } = spawnClaude({ prompt, cwd: outputDir, logPath, rawPath, config: summaryConfig });
   const r = await promise;
 
