@@ -40,8 +40,8 @@ claude-scan ./my-project --include "*.py"
 # Resume after crash or Ctrl+C
 claude-scan ./my-project --resume
 
-# Retry failed/timed-out files
-claude-scan --resume --retry
+# Retry failed/timed-out files (implies --resume)
+claude-scan --retry
 
 # Re-generate summary from existing reports
 claude-scan --summarize
@@ -92,7 +92,7 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
   -j, --parallel <n>        Parallel workers            (default: 12)
   -t, --timeout <seconds>   Per-file timeout            (default: 1800)
       --resume               Resume pending files from a previous scan
-      --retry                Retry failed/timed-out files (use with --resume)
+      --retry                Resume + also retry failed/timed-out files
       --include-tests        Include test files (excluded by default)
       --summarize            Re-generate AI summary from existing reports
       --include <glob>       Only scan matching files
@@ -127,7 +127,7 @@ Previous scan found: 42/66 completed. Resume previous scan? [y/N]
 To also retry files that failed or timed out:
 
 ```bash
-claude-scan --resume --retry
+claude-scan --retry
 ```
 
 **Signal handling:**

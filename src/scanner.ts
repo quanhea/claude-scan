@@ -423,17 +423,18 @@ export async function scan(options: ScanOptions): Promise<number> {
     }
   }
 
-  // Exit hints
+  // Exit hints — echo whatever target the user originally typed
+  const targetBit = options.targetArg ? `${options.targetArg} ` : "";
   if (state.stats.pending > 0) {
     console.log("");
     console.log(`  ${state.stats.pending} files still pending.`);
-    console.log("  To continue:  claude-scan --resume");
+    console.log(`  To continue:  claude-scan ${targetBit}--resume`);
   }
   const failedCount = state.stats.failed + state.stats.timeout;
   if (failedCount > 0) {
     console.log("");
     console.log(`  ${failedCount} files failed or timed out.`);
-    console.log("  To retry:     claude-scan --resume --retry");
+    console.log(`  To retry:     claude-scan ${targetBit}--retry`);
   }
 
   removeLockFile(absOutput);

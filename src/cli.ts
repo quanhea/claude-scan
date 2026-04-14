@@ -88,7 +88,7 @@ Options:
   -j, --parallel <n>        Parallel workers           (default: ${DEFAULTS.parallel})
   -t, --timeout <seconds>   Per-file timeout           (default: ${DEFAULTS.timeout})
       --resume               Resume pending files from a previous scan
-      --retry                Retry failed/timed-out files (use with --resume)
+      --retry                Resume + also retry failed/timed-out files
       --include-tests        Include test files (excluded by default)
       --include <glob>       Only scan matching files
       --exclude <glob>       Skip matching files
@@ -138,8 +138,13 @@ async function main(): Promise<void> {
       ? options.output
       : path.join(resolvedTarget, ".claude-scan");
 
+  // --retry implies --resume (retrying only makes sense on an existing scan)
+  const retry = !!options.retry;
+  const resume = !!options.resume || retry;
+
   const exitCode = await scan({
     targetDir: resolvedTarget,
+    targetArg: targetDir || null,
     outputDir,
     parallel: Number(options.parallel) || DEFAULTS.parallel,
     timeout: Number(options.timeout) || DEFAULTS.timeout,
@@ -152,8 +157,8 @@ async function main(): Promise<void> {
     exclude: options.exclude ? (options.exclude as string).split("\0") : null,
     includeTests: !!options.includeTests,
     summarize: !!options.summarize,
-    resume: !!options.resume,
-    retry: !!options.retry,
+    resume,
+    retry,
     dryRun: !!options.dryRun,
     force: !!options.force,
     verbose: !!options.verbose,
