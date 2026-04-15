@@ -153,7 +153,7 @@ export const DEFAULTS: ScanConfig & { maxFileSizeKB: number } = {
   parallel: 12,
   timeout: 1800,
   maxRetries: 2,
-  maxTurns: 30,
+  maxTurns: 100,
   maxFileSizeKB: 100,
   model: null,
   prompt: "scan.md",

@@ -99,7 +99,7 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
       --exclude <glob>       Skip matching files
   -o, --output <dir>        Output directory             (default: .claude-scan)
       --model <model>        Claude model to use
-      --max-turns <n>        Max Claude turns per file    (default: 30)
+      --max-turns <n>        Max Claude turns per file    (default: 100)
       --max-file-size <kb>   Skip files larger than       (default: 100)
       --retries <n>          Max retries per file         (default: 2)
       --dry-run              List files without scanning
