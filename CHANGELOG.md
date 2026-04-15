@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- Default `--max-turns` increased from 30 to 100 — complex files need more tool calls to trace through call chains
+- README: target directory defaults to current directory; examples lead with no-path usage
+
 ## 1.1.0
 
 - Added `--retry` flag: re-runs failed/timed-out files on `--resume`

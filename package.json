@@ -1,6 +1,6 @@
 {
   "name": "@eastagile/claude-scan",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Parallel vulnerability scanner powered by Claude Code. Scans every file in a project for security vulnerabilities.",
   "license": "MIT",
   "author": "East Agile <dev@eastagile.com> (https://eastagile.com)",

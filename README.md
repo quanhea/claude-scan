@@ -24,21 +24,25 @@ Prerequisites:
 
 ## Quick Start
 
+The target directory defaults to the current directory — run from inside your project:
+
 ```bash
-# Scan a project
-claude-scan ./my-project
+cd ~/code/my-project
+
+# Scan (default: current directory)
+claude-scan
 
 # Preview what files would be scanned
-claude-scan ./my-project --dry-run
+claude-scan --dry-run
 
 # Scan with 8 parallel workers
-claude-scan ./my-project -j 8
+claude-scan -j 8
 
 # Only scan Python files
-claude-scan ./my-project --include "*.py"
+claude-scan --include "*.py"
 
 # Resume after crash or Ctrl+C
-claude-scan ./my-project --resume
+claude-scan --resume
 
 # Retry failed/timed-out files (implies --resume)
 claude-scan --retry
@@ -47,8 +51,8 @@ claude-scan --retry
 claude-scan --summarize
 claude-scan --summarize --model claude-sonnet-4-6
 
-# Scan current directory
-claude-scan
+# Or pass a path explicitly
+claude-scan /path/to/project
 ```
 
 ## How It Works
@@ -113,7 +117,7 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
 State is saved atomically (write temp file → fsync → rename) after every file completes and every 30 seconds. If the process crashes, is killed, or you hit Ctrl+C:
 
 ```bash
-claude-scan ./my-project --resume
+claude-scan --resume
 ```
 
 Completed files are never re-scanned. Files that were mid-scan reset to pending.
@@ -149,7 +153,7 @@ Write a detailed report to {{REPORT_PATH}}.
 ```
 
 ```bash
-claude-scan ./my-project --prompt my-prompt.md
+claude-scan --prompt my-prompt.md
 ```
 
 ## Security Warning
