@@ -11,7 +11,6 @@ export interface ClaudeSpawnOptions {
   prompt: string;
   cwd: string;
   logPath: string;
-  rawPath: string;
   config: ScanConfig;
 }
 
@@ -62,10 +61,9 @@ export function spawnClaude(options: ClaudeSpawnOptions): {
   promise: Promise<ClaudeSpawnResult>;
   kill: () => void;
 } {
-  const { prompt, cwd, logPath, rawPath, config } = options;
+  const { prompt, cwd, logPath, config } = options;
 
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  fs.mkdirSync(path.dirname(rawPath), { recursive: true });
 
   const args: string[] = [
     "--dangerously-skip-permissions",
@@ -74,14 +72,18 @@ export function spawnClaude(options: ClaudeSpawnOptions): {
     "--max-turns",
     String(config.maxTurns),
     "--output-format",
-    "json",
+    "stream-json",
+    "--verbose",
     "--no-session-persistence",
   ];
 
   if (config.model) args.push("--model", config.model);
-  if (config.verbose) args.push("--verbose");
 
   const logStream = fs.createWriteStream(logPath, { flags: "w" });
+
+  // Write the rendered prompt as the first JSONL line so the log contains
+  // both the input (what was sent) and the output (stream-json events).
+  logStream.write(JSON.stringify({ type: "prompt", prompt }) + "\n");
 
   const child = spawn("claude", args, {
     cwd,
@@ -93,13 +95,9 @@ export function spawnClaude(options: ClaudeSpawnOptions): {
   let timeoutTimer: NodeJS.Timeout | null = null;
   let hangTimer: NodeJS.Timeout | null = null;
   let lastActivity = Date.now();
-  let lastStdoutChunk = "";
 
   if (child.stdout) {
-    child.stdout.on("data", (data: Buffer) => {
-      lastActivity = Date.now();
-      lastStdoutChunk = data.toString();
-    });
+    child.stdout.on("data", () => { lastActivity = Date.now(); });
     child.stdout.pipe(logStream);
   }
   if (child.stderr) {
@@ -118,14 +116,11 @@ export function spawnClaude(options: ClaudeSpawnOptions): {
     timeoutTimer = setTimeout(() => { if (!killed) kill(); }, config.timeout * 1000);
   }
 
-  // Hang detection only with --verbose (json mode has no output until done)
-  if (config.verbose) {
-    const HANG_CHECK_INTERVAL = 30_000;
-    const HANG_THRESHOLD = 120_000;
-    hangTimer = setInterval(() => {
-      if (Date.now() - lastActivity > HANG_THRESHOLD && !killed) kill();
-    }, HANG_CHECK_INTERVAL);
-  }
+  const HANG_CHECK_INTERVAL = 30_000;
+  const HANG_THRESHOLD = 15 * 60_000;  // 15 min — extended thinking can be silent
+  hangTimer = setInterval(() => {
+    if (Date.now() - lastActivity > HANG_THRESHOLD && !killed) kill();
+  }, HANG_CHECK_INTERVAL);
 
   const startTime = Date.now();
 
@@ -138,22 +133,27 @@ export function spawnClaude(options: ClaudeSpawnOptions): {
       const durationMs = Date.now() - startTime;
       const exitCode = code ?? (signal ? 128 + (signalNumber(signal) || 0) : 1);
 
-      // Parse JSON response
+      // Parse stream-json log: scan for the final {"type":"result"} line.
       let isError = false;
       let claudeResult: string | undefined;
       let cost: number | undefined;
 
       try {
-        const raw = lastStdoutChunk.trim() ||
-          (fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf-8").trim() : "");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          fs.writeFileSync(rawPath, JSON.stringify(parsed, null, 2));
-          isError = parsed.is_error === true;
-          claudeResult = parsed.result;
-          cost = parsed.total_cost_usd;
+        const raw = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf-8") : "";
+        for (const line of raw.split("\n").reverse()) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const obj = JSON.parse(trimmed);
+            if (obj.type === "result") {
+              isError = obj.is_error === true;
+              claudeResult = obj.result;
+              cost = obj.total_cost_usd;
+              break;
+            }
+          } catch { continue; }
         }
-      } catch {}
+      } catch { /* log unreadable */ }
 
       // Classify error
       let error: string | undefined;
@@ -224,7 +224,6 @@ export function spawnWorker(options: SpawnOptions): {
 
   const reportPath = path.join(outputDir, "reports", slug + ".md");
   const logPath = path.join(outputDir, "logs", slug + ".log");
-  const rawPath = path.join(outputDir, "raw", slug + ".json");
 
   const prompt = renderPrompt(promptTemplate, {
     FILE_PATH: path.join(targetDir, filePath),
@@ -232,7 +231,7 @@ export function spawnWorker(options: SpawnOptions): {
   });
 
   const { child, promise: claudePromise, kill } = spawnClaude({
-    prompt, cwd: targetDir, logPath, rawPath, config,
+    prompt, cwd: targetDir, logPath, config,
   });
 
   const promise = claudePromise.then((r): WorkerResult => {

@@ -86,8 +86,7 @@ Results go to `.claude-scan/` in the target directory (or `--output <dir>`):
 ├── reports/            # One markdown report per scanned file
 │   ├── src__auth__login.ts.md
 │   └── src__db__queries.py.md
-├── logs/               # Claude stdout+stderr per file
-└── raw/                # Raw JSON output from Claude
+└── logs/               # Full conversation log per file (JSONL: prompt + stream-json events)
 ```
 
 ## Options

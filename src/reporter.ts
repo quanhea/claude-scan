@@ -126,7 +126,6 @@ export async function summarizeWithClaude(options: {
   const reportsDir = path.join(outputDir, "reports");
   const summaryPath = path.join(outputDir, "summary.md");
   const logPath = path.join(outputDir, "logs", "summary.log");
-  const rawPath = path.join(outputDir, "raw", "summary.json");
 
   // Render the summary prompt — same pattern as per-file scan
   const template = loadPrompt("summary.md");
@@ -137,7 +136,7 @@ export async function summarizeWithClaude(options: {
 
   // Summary reads many files — use 60 min timeout instead of per-file timeout
   const summaryConfig = { ...config, timeout: 3600 };
-  const { promise } = spawnClaude({ prompt, cwd: outputDir, logPath, rawPath, config: summaryConfig });
+  const { promise } = spawnClaude({ prompt, cwd: outputDir, logPath, config: summaryConfig });
   const r = await promise;
 
   // Map result

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+### Logging
+
+- Switched to `--output-format stream-json --verbose` — logs now capture full turn-by-turn conversation (tool calls, results, assistant turns) as JSONL, not just the final JSON envelope
+- Rendered prompt written as the first JSONL line in every log — log is fully self-contained (input + output)
+- Removed `raw/` directory — the stream-json `result` envelope already carries cost, turns, `is_error`, and errors; the separate raw JSON file was redundant
+- Hang detector raised to 15 min (from 2 min) and always active — extended thinking can be silent between tool calls
+- `--verbose` flag removed from CLI options (always passed internally with stream-json)
+
 ## 1.1.2
 
 - Updated package description to reference Anthropic's scanning scaffold and Carlini's [un]prompted 2026 talk

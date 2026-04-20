@@ -1,6 +1,6 @@
 {
   "name": "@eastagile/claude-scan",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Anthropic's vulnerability scanning scaffold (Carlini, [un]prompted 2026) — parallel Claude Code security scans per file",
   "license": "MIT",
   "author": "East Agile <dev@eastagile.com> (https://eastagile.com)",
