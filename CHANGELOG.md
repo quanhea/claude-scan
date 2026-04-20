@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- Updated package description to reference Anthropic's scanning scaffold and Carlini's [un]prompted 2026 talk
+- Keywords updated for discoverability: claude-scan, vulnerability-scanner, code-security, ai-security
+- README subtitle rewritten to lead with the provenance (Carlini scaffold, Linux kernel bug)
+
 ## 1.1.1
 
 - Default `--max-turns` increased from 30 to 100 — complex files need more tool calls to trace through call chains

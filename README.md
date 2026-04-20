@@ -1,8 +1,8 @@
 # claude-scan
 
-Parallel vulnerability scanner powered by Claude Code.
+Open-source implementation of Anthropic's vulnerability scanning scaffold from Nicholas Carlini's [un]prompted 2026 talk — the method that found a 23-year-old Linux kernel bug.
 
-Scans every source file in a project for security vulnerabilities — each file gets its own Claude Code process running in parallel. Produces per-file vulnerability reports and an aggregated summary.
+Scans every source file in a project for security vulnerabilities using parallel Claude Code processes. Each file gets its own focused context window. Produces per-file vulnerability reports and an aggregated summary.
 
 ## Background
 
